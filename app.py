@@ -2,11 +2,99 @@ import streamlit as st
 import pandas as pd
 import requests
 import json
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 import io
 
 # Configuration de la page
 st.set_page_config(page_title="Taux de Change BCE", page_icon="💶")
+
+# ===== API Handler =====
+def handle_api_request():
+    """Handle API requests via URL query parameters"""
+    query_params = st.query_params
+    
+    if query_params.get("api") == "bce-exchange":
+        currencies_param = query_params.get("currencies", "")
+        date_param = query_params.get("date")
+        
+        if not currencies_param:
+            st.json({"status": "error", "code": -2, "message": "currencies parameter is required"})
+            return
+        
+        # Parse currencies
+        currency_list = [c.strip().upper() for c in currencies_param.split(",") if c.strip()]
+        
+        # Parse date
+        if date_param:
+            try:
+                selected_date = datetime.strptime(date_param, "%Y-%m-%d").date()
+            except ValueError:
+                st.json({"status": "error", "code": -2, "message": "Invalid date format. Use YYYY-MM-DD"})
+                return
+        else:
+            selected_date = date.today()
+        
+        # Fetch data (will be loaded below)
+        start_date = date(selected_date.year, 1, 1)
+        config = load_config()
+        df = fetch_ecb_history(start_date, selected_date, config)
+        
+        if df is None or df.empty:
+            st.json({"status": "error", "code": -1, "message": "No data available from ECB API"})
+            return
+        
+        # Filter currencies
+        df_filtered = df[df['CURRENCY'].isin(currency_list)]
+        
+        if df_filtered.empty:
+            st.json({"status": "error", "code": -1, "message": f"No data for currencies: {', '.join(currency_list)}"})
+            return
+        
+        # Find date
+        available_dates = sorted(df_filtered['TIME_PERIOD'].dt.date.unique())
+        actual_date = selected_date
+        
+        if selected_date not in available_dates:
+            valid_dates = [d for d in available_dates if d <= selected_date]
+            if valid_dates:
+                actual_date = valid_dates[-1]
+            else:
+                st.json({"status": "error", "code": -1, "message": f"No data available for date {selected_date} or earlier"})
+                return
+        
+        # Get rates
+        df_day = df_filtered[df_filtered['TIME_PERIOD'].dt.date == actual_date]
+        
+        if df_day.empty:
+            st.json({"status": "error", "code": -1, "message": "No data available for the specified date"})
+            return
+        
+        # Build response
+        rates = []
+        for _, row in df_day.iterrows():
+            rates.append({
+                "devise": row['CURRENCY'],
+                "taux": round(float(row['OBS_VALUE']), 4)
+            })
+        
+        rates.sort(key=lambda x: x['devise'])
+        
+        st.json({
+            "status": "success",
+            "date": actual_date.strftime("%Y-%m-%d"),
+            "date_requested": selected_date.strftime("%Y-%m-%d"),
+            "rates": rates
+        })
+        return
+    
+    elif query_params.get("api") == "health":
+        st.json({"status": "ok"})
+        return
+
+# Check if this is an API request
+if st.query_params.get("api"):
+    handle_api_request()
+    st.stop()
 
 # Injection CSS et icônes Feather (local)
 st.markdown("""
@@ -143,7 +231,9 @@ date_placeholder = col_date_display.empty()
 # --- Récupération des données ---
 # On utilise le cache de Streamlit pour éviter de spammer l'API
 @st.cache_data(ttl=3600)
-def fetch_ecb_history(start_date, end_date):
+def fetch_ecb_history(start_date, end_date, config=None):
+    if config is None:
+        config = load_config()
     # URL Wildcard pour récupérer TOUTES les devises
     # D = Daily, . = Toutes devises, EUR = Base, SP00.A = Spot
     url = config.get("api_url", "https://data-api.ecb.europa.eu/service/data/EXR/D..EUR.SP00.A")
@@ -349,22 +439,25 @@ st.subheader("📡 Accès par API REST")
 api_info = """
 ### Utilisation programmatique
 
-Vous pouvez accéder aux taux de change via notre API REST :
+Vous pouvez accéder aux taux de change via notre API intégrée :
 
-**Endpoint:** `GET /api/bce-exchange`
+**Endpoint:** `GET /?api=bce-exchange&currencies=USD,CHF`
 
 **Paramètres:**
-- `currencies` (requis): Codes de devises séparés par des virgules (ex: `EUR,USD,CHF`)
+- `currencies` (requis): Codes de devises séparés par des virgules
 - `date` (optionnel): Date au format `YYYY-MM-DD` (par défaut: aujourd'hui)
 
 **Exemples:**
 
 ```bash
-# Localhost
-curl "http://localhost:8000/api/bce-exchange?currencies=USD,CHF"
+# Taux actuels
+curl "https://bce-exchange-rates.onrender.com/?api=bce-exchange&currencies=USD,CHF"
 
-# Serveur de Dev (Réseau)
-curl "http://10.99.27.11:8000/api/bce-exchange?currencies=USD,CHF"
+# Taux à une date spécifique
+curl "https://bce-exchange-rates.onrender.com/?api=bce-exchange&currencies=EUR,MXN,GBP&date=2025-12-04"
+
+# Health check
+curl "https://bce-exchange-rates.onrender.com/?api=health"
 ```
 
 **Réponse (succès):**
@@ -372,10 +465,11 @@ curl "http://10.99.27.11:8000/api/bce-exchange?currencies=USD,CHF"
 {
   "status": "success",
   "date": "2025-12-04",
+  "date_requested": "2025-12-04",
   "rates": [
     {"devise": "CHF", "taux": 0.9345},
     {"devise": "GBP", "taux": 0.8123},
-    {"devise": "MXN", "taux": 21.3149}
+    {"devise": "USD", "taux": 1.0523}
   ]
 }
 ```
@@ -388,21 +482,6 @@ curl "http://10.99.27.11:8000/api/bce-exchange?currencies=USD,CHF"
   "message": "No data available for the specified date"
 }
 ```
-
-### Démarrage de l'API
-
-**Avec Docker:**
-```bash
-docker-compose up api
-```
-
-**Manuellement:**
-```bash
-pip install fastapi uvicorn
-python api.py
-```
-
-L'API sera disponible sur `http://localhost:8000` (ou `http://10.99.27.11:8000` sur le réseau).
 """
 
 st.markdown(api_info)
