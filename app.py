@@ -360,17 +360,17 @@ Vous pouvez accéder aux taux de change via notre API REST :
 **Exemples:**
 
 ```bash
-# Production - Déploiement Railway (Web + API)
-curl "https://your-app.up.railway.app/api/bce-exchange?currencies=USD,CHF"
+# Production - API (Railway TCP Proxy)
+curl "http://maglev.proxy.rlwy.net:49876/api/bce-exchange?currencies=USD,CHF"
 
-# Production - Dates spécifiques
-curl "https://your-app.up.railway.app/api/bce-exchange?currencies=EUR,MXN,GBP&date=2025-12-04"
+# Production - Avec dates spécifiques
+curl "http://maglev.proxy.rlwy.net:49876/api/bce-exchange?currencies=EUR,MXN,GBP&date=2025-12-04"
+
+# Health check
+curl "http://maglev.proxy.rlwy.net:49876/api/health"
 
 # Local development
 curl "http://localhost:8000/api/bce-exchange?currencies=USD,CHF"
-
-# Health check
-curl "http://localhost:8000/api/health"
 ```
 
 **Réponse (succès):**
@@ -381,8 +381,8 @@ curl "http://localhost:8000/api/health"
   "date_requested": "2025-12-05",
   "rates": [
     {"devise": "CHF", "taux": 0.9365},
-    {"devise": "USD", "taux": 1.0523},
-    {"devise": "MXN", "taux": 21.1912}
+    {"devise": "USD", "taux": 1.1645},
+    {"devise": "GBP", "taux": 0.8312}
   ]
 }
 ```
@@ -403,13 +403,16 @@ curl "http://localhost:8000/api/health"
 docker-compose up  # Lance Streamlit (8501) + API FastAPI (8000)
 ```
 
-**Railway (production recommandée):**
-1. Poussez ce repository vers GitHub
-2. Connectez-le à Railway (https://railway.app)
-3. Railway détecte automatiquement railway.toml
-4. Déploie et expose les deux services:
-   - Web: `https://your-app.up.railway.app/`
-   - API: `https://your-app.up.railway.app/api/`
+**Railway (production):**
+
+**Web UI (Streamlit):**
+- URL: https://bce-exchange-rates-production.up.railway.app/
+- Port: 8501 (Metal Edge)
+
+**REST API (FastAPI):**
+- URL: http://maglev.proxy.rlwy.net:49876/
+- Port: 49876 (TCP Proxy vers port 8000)
+- Endpoint: `/api/bce-exchange?currencies=USD,CHF&date=2025-12-05`
 """
 
 st.markdown(api_info)
