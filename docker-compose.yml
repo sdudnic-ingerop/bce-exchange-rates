@@ -1,0 +1,23 @@
+version: '3'
+services:
+  streamlit:
+    build: .
+    ports:
+      - "8501:8501"
+    volumes:
+      - .:/app
+    command: streamlit run app.py
+    environment:
+      - STREAMLIT_SERVER_PORT=8501
+      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    command: python api.py
+    environment:
+      - API_HOST=0.0.0.0
+      - API_PORT=8000

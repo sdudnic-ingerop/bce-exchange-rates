@@ -1,0 +1,4 @@
+{
+    "api_url": "https://data-api.ecb.europa.eu/service/data/EXR/D..EUR.SP00.A",
+    "default_currencies": ["CHF", "MXN"]
+}
