@@ -151,19 +151,9 @@ def health_check():
 
 @app.get("/")
 def root():
-    """Documentation de l'API"""
-    return {
-        "app": "BCE Exchange Rate API",
-        "version": "1.0.0",
-        "endpoints": {
-            "health": "/api/health",
-            "exchange_rates": "/api/bce-exchange?currencies=EUR,USD,CHF&date=2025-12-04"
-        },
-        "examples": {
-            "basic": "/api/bce-exchange?currencies=USD,CHF",
-            "with_date": "/api/bce-exchange?currencies=EUR,MXN,GBP&date=2025-11-15"
-        }
-    }
+    """Redirect API documentation to /api/health"""
+    # Return simple API info (removed full documentation to avoid conflict with Streamlit)
+    return {"message": "BCE Exchange Rate API. See /api/bce-exchange for exchange rates"}
 
 
 if __name__ == "__main__":
