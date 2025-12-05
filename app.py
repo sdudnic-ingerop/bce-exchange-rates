@@ -242,13 +242,13 @@ if selected_currencies:
                         
                         # Création de la colonne Devise avec drapeau intégré (HTML/SVG)
                         # Utilisation de HTML brut pour intégrer le SVG redimensionné dans la même colonne
-                        df_day['Devise'] = df_day['CURRENCY'].apply(
+                        df_day['Currency'] = df_day['CURRENCY'].apply(
                             lambda x: f'<img src="https://flagcdn.com/{CURRENCY_TO_COUNTRY.get(x, "xx")}.svg" width="16" height="16" style="vertical-align:middle; margin-right:8px;"> {x}'
                         )
 
-                        display_df = df_day[['Devise', 'OBS_VALUE']].rename(columns={
-                            'OBS_VALUE': 'Taux'
-                        }).sort_values('Devise').reset_index(drop=True)
+                        display_df = df_day[['Currency', 'OBS_VALUE']].rename(columns={
+                            'OBS_VALUE': 'Rate'
+                        }).sort_values('Currency').reset_index(drop=True)
                         
                         st.subheader(f"Taux au {selected_date}")
                         # Afficher la date sélectionnée dans l'entête
@@ -260,11 +260,11 @@ if selected_currencies:
                             unsafe_allow_html=True
                         )
                         
-                        # CSV Export (incluant la date sélectionnée)
+                        # CSV Export (including selected date)
                         csv_df = df_day[['CURRENCY', 'OBS_VALUE']].rename(columns={
-                            'CURRENCY': 'devise',
-                            'OBS_VALUE': 'taux_bce'
-                        }).sort_values('devise').reset_index(drop=True)
+                            'CURRENCY': 'currency',
+                            'OBS_VALUE': 'rate'
+                        }).sort_values('currency').reset_index(drop=True)
                         csv_df['date'] = selected_date
                         
                         csv_text = csv_df.to_csv(index=False, sep=';')
@@ -380,9 +380,9 @@ curl "http://localhost:8000/api/bce-exchange?currencies=USD,CHF"
   "date": "2025-12-05",
   "date_requested": "2025-12-05",
   "rates": [
-    {"devise": "CHF", "taux": 0.9365},
-    {"devise": "USD", "taux": 1.1645},
-    {"devise": "GBP", "taux": 0.8312}
+    {"currency": "CHF", "rate": 0.9365},
+    {"currency": "USD", "rate": 1.1645},
+    {"currency": "GBP", "rate": 0.8312}
   ]
 }
 ```

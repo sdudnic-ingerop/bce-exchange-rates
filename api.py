@@ -43,14 +43,14 @@ def get_exchange_rates(
     date_str: Optional[str] = Query(None, description="Date in format YYYY-MM-DD (default: today)")
 ):
     """
-    Récupère les taux de change pour les devises spécifiées à une date donnée.
+    Get exchange rates for specified currencies at a given date.
     
-    Exemple: /api/bce-exchange?currencies=EUR,USD,CHF&date=2025-12-04
+    Example: /api/bce-exchange?currencies=EUR,USD,CHF&date=2025-12-04
     
-    Réponse:
-    - Succès: {"date": "2025-12-04", "rates": [{"devise": "CHF", "taux": 0.9345}, ...]}
-    - Erreur données: {"status": "error", "code": -1, "message": "No data available for the specified date"}
-    - Erreur paramètres: {"status": "error", "code": -2, "message": "Invalid currencies"}
+    Response:
+    - Success: {"status": "success", "date": "2025-12-04", "rates": [{"currency": "CHF", "rate": 0.9345}, ...]}
+    - No data: {"status": "error", "code": -1, "message": "No data available for the specified date"}
+    - Bad params: {"status": "error", "code": -2, "message": "Invalid currencies"}
     """
     
     # Parser la date
@@ -128,12 +128,12 @@ def get_exchange_rates(
     rates = []
     for _, row in df_day.iterrows():
         rates.append({
-            "devise": row['CURRENCY'],
-            "taux": round(float(row['OBS_VALUE']), 4)
+            "currency": row['CURRENCY'],
+            "rate": round(float(row['OBS_VALUE']), 4)
         })
     
     # Trier par code devise
-    rates.sort(key=lambda x: x['devise'])
+    rates.sort(key=lambda x: x['currency'])
     
     return {
         "status": "success",
