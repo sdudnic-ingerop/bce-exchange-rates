@@ -1,11 +1,11 @@
 #!/bin/bash
-# Start both Streamlit and FastAPI for Railway deployment
+# For Railway: Run Streamlit on the exposed port (from PORT env var, defaults to 8501)
+# The FastAPI service runs on port 8000 in the background for internal use if needed
 
-echo "Starting Streamlit on port 8501..."
-streamlit run app.py --server.address=0.0.0.0 --server.port=8501 &
+PORT=${PORT:-8501}
 
-echo "Starting FastAPI on port 8000..."
-python api.py &
-
-# Wait for both processes
-wait
+echo "Starting Streamlit on port $PORT..."
+streamlit run app.py \
+  --server.address=0.0.0.0 \
+  --server.port=$PORT \
+  --server.headless=true
