@@ -360,14 +360,17 @@ Vous pouvez accéder aux taux de change via notre API REST :
 **Exemples:**
 
 ```bash
-# Taux actuels
-curl "https://bce-exchange-rates.onrender.com/api/bce-exchange?currencies=USD,CHF"
+# Production - Déploiement Railway (Web + API)
+curl "https://your-app.up.railway.app/api/bce-exchange?currencies=USD,CHF"
 
-# Taux à une date spécifique
-curl "https://bce-exchange-rates.onrender.com/api/bce-exchange?currencies=EUR,MXN,GBP&date=2025-12-04"
+# Production - Dates spécifiques
+curl "https://your-app.up.railway.app/api/bce-exchange?currencies=EUR,MXN,GBP&date=2025-12-04"
+
+# Local development
+curl "http://localhost:8000/api/bce-exchange?currencies=USD,CHF"
 
 # Health check
-curl "https://bce-exchange-rates.onrender.com/api/health"
+curl "http://localhost:8000/api/health"
 ```
 
 **Réponse (succès):**
@@ -392,6 +395,21 @@ curl "https://bce-exchange-rates.onrender.com/api/health"
   "message": "No data available for the specified date"
 }
 ```
+
+### Déploiement
+
+**Docker Compose (local):**
+```bash
+docker-compose up  # Lance Streamlit (8501) + API FastAPI (8000)
+```
+
+**Railway (production recommandée):**
+1. Poussez ce repository vers GitHub
+2. Connectez-le à Railway (https://railway.app)
+3. Railway détecte automatiquement railway.toml
+4. Déploie et expose les deux services:
+   - Web: `https://your-app.up.railway.app/`
+   - API: `https://your-app.up.railway.app/api/`
 """
 
 st.markdown(api_info)
