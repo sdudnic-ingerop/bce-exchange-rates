@@ -24,6 +24,59 @@
 - **Ports exposés** : 8501 (Streamlit), 8000 (API REST)
 - **Dockerfile** : Configuration standard avec installation des dépendances
 
+### Local Docker Development (explicit)
+- **Purpose:** Run the full development stack locally in an isolated, reproducible environment using `docker-compose`.
+- **Compose file:** `docker-compose.yml` launches two services: `streamlit` (port 8501) and `api` (port 8000).
+- **Quick start (foreground):**
+
+  - `docker-compose up --build`
+
+  This builds images if needed and streams logs to your terminal. Press `Ctrl+C` to stop.
+
+- **Run detached (background):**
+
+  - `docker-compose up -d --build`
+
+  This starts services in the background. Use the logs and ps commands below to inspect.
+
+- **Stop and remove containers:**
+
+  - `docker-compose down`
+
+- **Run/stop a single service:**
+
+  - Start just the API: `docker-compose up --build api`
+  - Start just the UI: `docker-compose up --build streamlit`
+  - Stop a single service: `docker-compose stop api` or `docker-compose stop streamlit`
+
+- **View logs:**
+
+  - Tail both services: `docker-compose logs -f`
+  - Tail only the API: `docker-compose logs -f api`
+  - Tail only the UI: `docker-compose logs -f streamlit`
+
+- **Rebuild an updated image:**
+
+  - `docker-compose build --no-cache <service>` (e.g., `docker-compose build --no-cache api`)
+
+- **Ports and access (local):**
+
+  - Streamlit UI: `http://localhost:8501`
+  - FastAPI API: `http://localhost:8000/api/bce-exchange`
+
+- **Common checks (curl examples):**
+
+  - Health: `curl "http://localhost:8000/api/health"`
+  - Example: `curl "http://localhost:8000/api/bce-exchange?currencies=USD,CHF"`
+
+- **Notes & troubleshooting:**
+
+  - Source is mounted into the container so code edits normally apply immediately; if not, rebuild with `--build`.
+  - If a port is already bound, stop the process using it (Windows: use `Get-Process`/`Stop-Process` or `netstat -ano`) or change ports in `docker-compose.yml`.
+  - Use `docker-compose down --volumes` if you want to clear named volumes.
+
+This section provides everything required to run and test the project locally using Docker Compose.
+
 ### Docker Compose
 ```yaml
 version: '3'
@@ -165,6 +218,7 @@ python api.py
 
 ### Exemple d'utilisation
 ```bash
+
 # Taux actuels
 curl "http://localhost:8000/api/bce-exchange?currencies=USD,CHF"
 

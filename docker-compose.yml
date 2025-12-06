@@ -6,7 +6,7 @@ services:
       - "8501:8501"
     volumes:
       - .:/app
-    command: streamlit run app.py
+    command: streamlit run app.py --server.address=0.0.0.0 --server.port=8501
     environment:
       - STREAMLIT_SERVER_PORT=8501
       - STREAMLIT_SERVER_ADDRESS=0.0.0.0
@@ -17,7 +17,8 @@ services:
       - "8000:8000"
     volumes:
       - .:/app
-    command: python api.py
+    # Use uvicorn with --reload to enable hot-reload when source changes
+    command: uvicorn api:app --host 0.0.0.0 --port 8000 --reload
     environment:
       - API_HOST=0.0.0.0
       - API_PORT=8000
