@@ -17,10 +17,10 @@ html, body, [class*="css"] {
     font-size: 10pt !important;
 }
 
-/* Titres */
+/* Titres - Petits */
 h1, h2, h3, h4, h5, h6 {
     font-family: Arial, sans-serif !important;
-    font-size: 12pt !important;
+    font-size: 10pt !important;
 }
 
 /* Tableaux et Chiffres: Arial 10 */
@@ -63,6 +63,14 @@ span[data-baseweb="tag"] {
 }
 span[data-baseweb="tag"] span {
     color: black !important;
+}
+
+/* Bouton Download compact */
+button[kind="secondary"] {
+    padding: 0.25rem 0.5rem !important;
+    font-size: 9pt !important;
+    height: auto !important;
+    min-height: auto !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -131,14 +139,12 @@ CURRENCY_TO_COUNTRY = {
 ALL_CURRENCIES = sorted(CURRENCY_DETAILS.keys())
 
 # En-tête avec Logo
-col_logo, col_title, col_date_display = st.columns([1, 5, 2])
+col_logo, col_title = st.columns([1, 5])
 with col_logo:
     # Logo officiel de la BCE
     st.image("assets/ecb_logo.svg", width=100)
 with col_title:
     st.title("Taux de Change BCE")
-# Placeholder pour afficher la date sélectionnée dans l'entête
-date_placeholder = col_date_display.empty()
 
 # --- Récupération des données ---
 # On utilise le cache de Streamlit pour éviter de spammer l'API
@@ -181,7 +187,7 @@ with col_select:
         "Devises",
         options=ALL_CURRENCIES,
         default=config.get("default_currencies", []),
-        format_func=lambda x: CURRENCY_DETAILS.get(x, x),
+        format_func=lambda x: f'<img src="https://flagcdn.com/{CURRENCY_TO_COUNTRY.get(x, "xx")}.svg" width="16" height="16" style="vertical-align:middle; margin-right:4px;"> {x}',
         help="Sélectionnez une ou plusieurs devises"
     )
 with col_date:
@@ -251,8 +257,6 @@ if selected_currencies:
                         }).sort_values('Currency').reset_index(drop=True)
                         
                         st.subheader(f"Taux au {selected_date}")
-                        # Afficher la date sélectionnée dans l'entête
-                        date_placeholder.markdown(f"**Date sélectionnée :** {selected_date}")
                         
                         # Rendu en HTML pour supporter les tags <img>
                         st.markdown(
@@ -279,7 +283,7 @@ if selected_currencies:
                                 data=csv_text,
                                 file_name=f"taux_bce_{selected_date}.csv",
                                 mime="text/csv",
-                                use_container_width=True,
+                                use_container_width=False,
                                 help="Télécharger le CSV"
                             )
 
@@ -323,12 +327,12 @@ if selected_currencies:
                     colors = ['#003da5', '#FF6B6B', '#FFA500', '#4ECDC4', '#45B7D1']
                     
                     for i, col in enumerate(chart_data.columns):
-                        line = alt.Chart(chart_data_reset).mark_line(point=True).encode(
+                        line = alt.Chart(chart_data_reset).mark_line(point=True, size=2).encode(
                             x=alt.X('Date:T', title=None), # Suppression du titre de l'axe X
-                            y=alt.Y(f'{col}:Q', title=f'{col}', scale=alt.Scale(zero=False)),
+                            y=alt.Y(f'{col}:Q', title=f'{col}', scale=alt.Scale(zero=False), axis=alt.Axis(labelExpr='datum.label')),
                             color=alt.value(colors[i % len(colors)]),
                             tooltip=[alt.Tooltip('Date:T', format='%Y-%m-%d'), alt.Tooltip(f'{col}:Q', format='.4f')]
-                        ).properties(width=400, height=300)
+                        ).properties(width=500, height=300)
                         lines.append(line)
                     
                     # Combiner les graphiques
@@ -360,17 +364,14 @@ Vous pouvez accéder aux taux de change via notre API REST :
 **Exemples:**
 
 ```bash
-# Production - API (Railway TCP Proxy)
+# API (Railway TCP Proxy)
 curl "http://maglev.proxy.rlwy.net:49876/api/bce-exchange?currencies=USD,CHF"
 
-# Production - Avec dates spécifiques
+# Avec dates spécifiques
 curl "http://maglev.proxy.rlwy.net:49876/api/bce-exchange?currencies=EUR,MXN,GBP&date=2025-12-04"
 
 # Health check
 curl "http://maglev.proxy.rlwy.net:49876/api/health"
-
-# Local development
-curl "http://localhost:8000/api/bce-exchange?currencies=USD,CHF"
 ```
 
 **Réponse (succès):**
@@ -403,7 +404,7 @@ curl "http://localhost:8000/api/bce-exchange?currencies=USD,CHF"
 docker-compose up  # Lance Streamlit (8501) + API FastAPI (8000)
 ```
 
-**Railway (production):**
+**Railway:**
 
 **Web UI (Streamlit):**
 - URL: https://bce-exchange-rates-production.up.railway.app/
