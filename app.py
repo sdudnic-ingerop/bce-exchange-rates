@@ -5,25 +5,25 @@ import json
 from datetime import date, timedelta
 import io
 
-# Configuration de la page
+# Page configuration
 st.set_page_config(page_title="Taux de Change BCE", page_icon="💶")
 
-# Injection CSS et icônes Feather (local)
+# CSS injection and Feather icons (local)
 st.markdown("""
 <style>
-/* Police par défaut: Arial 10 */
+/* Default font: Arial 10 */
 html, body, [class*="css"] {
     font-family: Arial, sans-serif !important;
     font-size: 10pt !important;
 }
 
-/* Titres - Petits */
+/* Headings - Small */
 h1, h2, h3, h4, h5, h6 {
     font-family: Arial, sans-serif !important;
     font-size: 10pt !important;
 }
 
-/* Tableaux et Chiffres: Arial 10 */
+/* Tables and Numbers: Arial 10 */
 [data-testid="stDataFrame"], table {
     font-family: Arial, sans-serif !important;
     font-size: 10pt !important;
@@ -37,7 +37,7 @@ h1, h2, h3, h4, h5, h6 {
     font-size: 10pt !important;
 }
 
-/* Style pour le tableau HTML personnalisé */
+/* Custom HTML table styling */
 table {
     width: 100%;
     border-collapse: collapse;
@@ -48,14 +48,21 @@ th {
     padding: 8px;
     background-color: transparent;
     border-bottom: 1px solid #ccc;
-    font-weight: bold;
+    font-weight: normal;
+}
+
+/* Harmonized flag images */
+img[src*="flagcdn"] {
+    height: 16px;
+    width: auto;
+    vertical-align: middle;
 }
 td {
     padding: 8px;
     border-bottom: 1px solid #eee;
 }
 
-/* Selecteur de devises: Pas de couleur de fond, bordure fine, texte noir */
+/* Currency selector: no background, thin border, black text */
 span[data-baseweb="tag"] {
     background-color: transparent !important;
     border: 1px solid #ccc !important;
@@ -65,7 +72,7 @@ span[data-baseweb="tag"] span {
     color: black !important;
 }
 
-/* Bouton Download compact */
+/* Compact Download button */
 button[kind="secondary"] {
     padding: 0.25rem 0.5rem !important;
     font-size: 9pt !important;
@@ -75,7 +82,7 @@ button[kind="secondary"] {
 </style>
 """, unsafe_allow_html=True)
 
-# Chargement de la configuration
+# Load configuration
 @st.cache_data
 def load_config():
     try:
@@ -86,7 +93,7 @@ def load_config():
 
 config = load_config()
 
-# Dictionnaire des devises avec descriptions pour la recherche
+# Currency dictionary with descriptions for search
 CURRENCY_DETAILS = {
     "USD": "🇺🇸 USD - Dollar américain",
     "JPY": "🇯🇵 JPY - Yen",
@@ -125,7 +132,7 @@ CURRENCY_DETAILS = {
     "TWD": "🇹🇼 TWD - Dollar"
 }
 
-# Mapping Code Devise -> Code Pays (ISO 2 lettres) pour les drapeaux
+# Mapping Currency Code -> Country Code (ISO 2 letters) for flags
 CURRENCY_TO_COUNTRY = {
     "USD": "us", "JPY": "jp", "BGN": "bg", "CZK": "cz", "DKK": "dk", "GBP": "gb",
     "HUF": "hu", "PLN": "pl", "RON": "ro", "SEK": "se", "CHF": "ch", "ISK": "is",
@@ -135,23 +142,23 @@ CURRENCY_TO_COUNTRY = {
     "ARS": "ar", "DZD": "dz", "MAD": "ma", "RUB": "ru", "TWD": "tw"
 }
 
-# Liste complète des devises supportées par la BCE (liste statique pour l'UI)
+# Complete list of currencies supported by ECB (static list for UI)
 ALL_CURRENCIES = sorted(CURRENCY_DETAILS.keys())
 
-# En-tête avec Logo
+# Header with Logo
 col_logo, col_title = st.columns([1, 5])
 with col_logo:
-    # Logo officiel de la BCE
+    # Official ECB logo
     st.image("assets/ecb_logo.svg", width=100)
 with col_title:
     st.title("Taux de Change BCE")
 
-# --- Récupération des données ---
-# On utilise le cache de Streamlit pour éviter de spammer l'API
+# --- Data retrieval ---
+# Use Streamlit cache to avoid spamming the API
 @st.cache_data(ttl=3600)
 def fetch_ecb_history(start_date, end_date):
-    # URL Wildcard pour récupérer TOUTES les devises
-    # D = Daily, . = Toutes devises, EUR = Base, SP00.A = Spot
+    # Wildcard URL to fetch ALL currencies
+    # D = Daily, . = All currencies, EUR = Base, SP00.A = Spot
     url = config.get("api_url", "https://data-api.ecb.europa.eu/service/data/EXR/D..EUR.SP00.A")
     
     params = {
@@ -170,7 +177,7 @@ def fetch_ecb_history(start_date, end_date):
             return None
             
         df = pd.read_csv(io.StringIO(response.text))
-        # Conversion de la colonne TIME_PERIOD en datetime
+        # Convert TIME_PERIOD column to datetime
         if 'TIME_PERIOD' in df.columns:
             df['TIME_PERIOD'] = pd.to_datetime(df['TIME_PERIOD'])
         return df
@@ -178,23 +185,23 @@ def fetch_ecb_history(start_date, end_date):
         st.error(f"Erreur lors de la récupération des données : {e}")
         return None
 
-# --- Logique Principale ---
+# --- Main Logic ---
 
-# 1. Sélection des devises + Date (même ligne)
+# 1. Select currencies + Date (same row)
 col_select, col_date = st.columns([3,1])
 with col_select:
     selected_currencies = st.multiselect(
         "Devises",
         options=ALL_CURRENCIES,
         default=config.get("default_currencies", []),
-        format_func=lambda x: f'<img src="https://flagcdn.com/{CURRENCY_TO_COUNTRY.get(x, "xx")}.svg" width="16" height="16" style="vertical-align:middle; margin-right:4px;"> {x}',
+        format_func=lambda x: CURRENCY_DETAILS.get(x, x),
         help="Sélectionnez une ou plusieurs devises"
     )
 with col_date:
     input_date = st.date_input("Date", value=date.today(), help="Date souhaitée")
 
 if selected_currencies:
-    # 2. Récupération de l'historique (Année en cours)
+    # 2. Fetch history (Current year)
     start_of_year = date(date.today().year, 1, 1)
     today = date.today()
     
@@ -202,30 +209,30 @@ if selected_currencies:
         df_history = fetch_ecb_history(start_of_year, today)
     
     if df_history is not None and not df_history.empty:
-        # Filtrer sur les devises sélectionnées
+        # Filter on selected currencies
         mask_curr = df_history['CURRENCY'].isin(selected_currencies)
         df_filtered = df_history[mask_curr].copy()
         
         if not df_filtered.empty:
-            # 3. Déterminer les dates disponibles
+            # 3. Determine available dates
             available_dates = sorted(df_filtered['TIME_PERIOD'].dt.date.unique())
             
             if available_dates:
                 min_date = available_dates[0]
                 max_date = available_dates[-1]
                 
-                # Use the top-level date selector; clamp to available range
+                # Clamp date to available range
                 if input_date < min_date:
                     input_date = min_date
                 if input_date > max_date:
                     input_date = max_date
 
-                # Gestion des dates sans données (Week-ends/Fériés)
+                # Handle dates without data (weekends/holidays)
                 if input_date in available_dates:
                     selected_date = input_date
                     is_exact_match = True
                 else:
-                    # Si la date choisie n'est pas dispo, on prend la précédente la plus proche
+                    # If selected date is unavailable, use closest previous date
                     valid_dates = [d for d in available_dates if d <= input_date]
                     if valid_dates:
                         selected_date = valid_dates[-1]
@@ -234,9 +241,9 @@ if selected_currencies:
                         selected_date = None
                         is_exact_match = False
 
-                # 4. Affichage du Tableau et Graphique
+                # 4. Display Table and Chart
                 
-                # Layout: Tableau (gauche) | Graphique (droite)
+                # Layout: Table (left) | Chart (right)
                 c_table, c_chart = st.columns([1, 2])
                 
                 with c_table:
@@ -246,25 +253,27 @@ if selected_currencies:
 
                         df_day = df_filtered[df_filtered['TIME_PERIOD'].dt.date == selected_date].copy()
                         
-                        # Création de la colonne Devise avec drapeau intégré (HTML/SVG)
-                        # Utilisation de HTML brut pour intégrer le SVG redimensionné dans la même colonne
-                        df_day['Currency'] = df_day['CURRENCY'].apply(
-                            lambda x: f'<img src="https://flagcdn.com/{CURRENCY_TO_COUNTRY.get(x, "xx")}.svg" width="16" height="16" style="vertical-align:middle; margin-right:8px;"> {x}'
+                        # Create currency column with integrated flag (HTML/SVG)
+                        # Use raw HTML to embed resized SVG in same column
+                        df_day['currency_display'] = df_day['CURRENCY'].apply(
+                            lambda x: f'<img src="https://flagcdn.com/{CURRENCY_TO_COUNTRY.get(x, "xx")}.svg" height="16px" style="vertical-align:middle; margin-right:8px;"> {x}'
                         )
 
-                        display_df = df_day[['Currency', 'OBS_VALUE']].rename(columns={
-                            'OBS_VALUE': 'Rate'
-                        }).sort_values('Currency').reset_index(drop=True)
+                        display_df = df_day[['currency_display', 'OBS_VALUE']].rename(columns={
+                            'currency_display': 'Devise',
+                            'OBS_VALUE': 'Taux'
+                        }).sort_values('Devise').reset_index(drop=True)
                         
                         st.subheader(f"Taux au {selected_date}")
                         
-                        # Rendu en HTML pour supporter les tags <img>
-                        st.markdown(
-                            display_df.to_html(escape=False, index=False, float_format="%.4f"),
-                            unsafe_allow_html=True
-                        )
+                        # Render as HTML to support <img> tags and add tooltips to headers
+                        html_table = display_df.to_html(escape=False, index=False, float_format="%.4f")
+                        # Replace headers with tooltips
+                        html_table = html_table.replace('<th>Devise</th>', '<th title="Code et drapeau de la devise">Devise <span style="cursor: help; color: #0066cc;">?</span></th>')
+                        html_table = html_table.replace('<th>Taux</th>', '<th title="Taux de change par rapport à l\'EUR">Taux <span style="cursor: help; color: #0066cc;">?</span></th>')
+                        st.markdown(html_table, unsafe_allow_html=True)
                         
-                        # CSV Export (including selected date)
+                        # CSV export (including selected date)
                         csv_df = df_day[['CURRENCY', 'OBS_VALUE']].rename(columns={
                             'CURRENCY': 'currency',
                             'OBS_VALUE': 'rate'
@@ -288,7 +297,7 @@ if selected_currencies:
                             )
 
                 with c_chart:
-                    # 5. Graphique Historique
+                    # 5. History Chart
                     st.subheader("Historique")
                     
                     # Sélecteur de période
@@ -300,7 +309,7 @@ if selected_currencies:
                         label_visibility="collapsed"
                     )
                     
-                    # Filtrage des données selon la période
+                    # Filter data by period
                     df_chart = df_filtered.copy()
                     if period == "Mois":
                         start_period = today - timedelta(days=30)
@@ -308,34 +317,34 @@ if selected_currencies:
                     elif period == "Trimestre":
                         start_period = today - timedelta(days=90)
                         df_chart = df_chart[df_chart['TIME_PERIOD'].dt.date >= start_period]
-                    # Année = tout l'historique récupéré (YTD)
+                    # Year = all retrieved history (YTD)
                     
-                    # Pivot pour avoir les devises en colonnes pour le graphique
+                    # Pivot to get currencies in columns for chart
                     chart_data = df_chart.pivot(index='TIME_PERIOD', columns='CURRENCY', values='OBS_VALUE')
                     
-                    # Créer un graphique avec axes Y secondaires pour chaque devise
+                    # Create chart with secondary Y axes for each currency
                     import altair as alt
                     
                     chart_data_reset = chart_data.reset_index()
-                    # Renommer TIME_PERIOD en Date pour l'affichage
+                    # Rename TIME_PERIOD to Date for display
                     chart_data_reset = chart_data_reset.rename(columns={'TIME_PERIOD': 'Date'})
-                    # Format string pour Altair si besoin, mais datetime marche bien
+                    # Format string for Altair if needed, but datetime works well
                     # chart_data_reset['Date'] = chart_data_reset['Date'].dt.strftime('%Y-%m-%d')
                     
-                    # Créer des lignes avec des échelles distinctes (min-max auto)
+                    # Create lines with distinct scales (auto min-max)
                     lines = []
                     colors = ['#003da5', '#FF6B6B', '#FFA500', '#4ECDC4', '#45B7D1']
                     
                     for i, col in enumerate(chart_data.columns):
                         line = alt.Chart(chart_data_reset).mark_line(point=True, size=2).encode(
-                            x=alt.X('Date:T', title=None), # Suppression du titre de l'axe X
+                            x=alt.X('Date:T', title=None), # Remove X-axis title
                             y=alt.Y(f'{col}:Q', title=f'{col}', scale=alt.Scale(zero=False), axis=alt.Axis(labelExpr='datum.label')),
                             color=alt.value(colors[i % len(colors)]),
                             tooltip=[alt.Tooltip('Date:T', format='%Y-%m-%d'), alt.Tooltip(f'{col}:Q', format='.4f')]
                         ).properties(width=500, height=300)
                         lines.append(line)
                     
-                    # Combiner les graphiques
+                    # Combine charts
                     if lines:
                         combined_chart = alt.layer(*lines).resolve_scale(y='independent').interactive()
                         st.altair_chart(combined_chart, use_container_width=True)
@@ -346,7 +355,7 @@ if selected_currencies:
         st.error("Impossible de récupérer les données historiques.")
 else:
     st.info("Veuillez sélectionner au moins une devise.")
-# ===== API REST DOCUMENTATION =====
+# ===== REST API DOCUMENTATION =====
 st.divider()
 st.subheader("📡 Accès par API REST")
 
