@@ -1,0 +1,241 @@
+<header>
+  <div class="container">
+    <div class="header-content">
+      <a class="logo" (click)="navigateTo('home')" style="cursor: pointer;">
+        <img src="/ecb_logo.svg" alt="BCE Logo" style="height: 40px; width: auto;">
+        <h1>Taux de Change BCE</h1>
+      </a>
+      <nav>
+        <button [class.active]="currentView === 'home'" (click)="navigateTo('home')">
+          Accueil
+        </button>
+        <button [class.active]="currentView === 'docs'" (click)="navigateTo('docs')">
+          Docs API
+        </button>
+      </nav>
+    </div>
+  </div>
+</header>
+
+<main class="container">
+  <!-- Home View -->
+  <div *ngIf="currentView === 'home'">
+    <!-- Controls Section -->
+    <section class="controls-section">
+      <div class="currency-control">
+        <mat-form-field appearance="outline">
+          <mat-label>Devises</mat-label>
+          <mat-chip-grid #chipGrid>
+            <mat-chip-row *ngFor="let currency of selectedCurrencies" 
+                          (removed)="removeCurrency(currency)">
+              {{ currency }}
+              <button matChipRemove>
+                <mat-icon>cancel</mat-icon>
+              </button>
+            </mat-chip-row>
+            <input
+              placeholder="Ajouter une devise..."
+              [matChipInputFor]="chipGrid"
+              [(ngModel)]="currencyFilter"
+              [matAutocomplete]="auto"
+              (keydown)="onCurrencyInput($event)"
+            />
+          </mat-chip-grid>
+          <mat-autocomplete #auto="matAutocomplete" (optionSelected)="selectCurrency($event.option.value)">
+            <mat-option *ngFor="let currency of filteredCurrencies" [value]="currency">
+              {{ currency }}
+            </mat-option>
+          </mat-autocomplete>
+        </mat-form-field>
+      </div>
+      
+      <div class="date-control">
+        <label for="date-input">Date</label>
+        <input 
+          id="date-input"
+          type="date" 
+          [(ngModel)]="selectedDate" 
+          (change)="onDateChange()"
+          [max]="getRateDate()"
+        />
+      </div>
+    </section>
+
+    <!-- Loading / Error Messages -->
+    <div *ngIf="loading" class="loading-message">
+      Chargement des données...
+    </div>
+
+    <div *ngIf="error" class="error-message">
+      {{ error }}
+    </div>
+
+    <!-- Content Grid: Table + Chart -->
+    <div *ngIf="!loading && exchangeRates.length > 0" class="content-grid">
+      <!-- Left Column: Table and CSV -->
+      <section class="table-section">
+        <h2>Taux ({{ getRateDate() }})</h2>
+        
+        <button class="export-button" (click)="exportCSV()" [disabled]="exchangeRates.length === 0">
+          ⇩ CSV
+        </button>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Devise</th>
+              <th>Taux EUR</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let rate of exchangeRates">
+              <td class="currency-cell">
+                <img [src]="getFlagUrl(rate.flag)" [alt]="rate.currency">
+                <span>{{ rate.currency }}</span>
+              </td>
+              <td class="rate-cell">{{ rate.rate.toFixed(4) }}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="csv-output">{{ getCSVOutput() }}</div>
+      </section>
+
+      <!-- Right Column: Chart -->
+      <section class="chart-section">
+        <h2>Historique</h2>
+        
+        <div class="period-selector">
+          <label>
+            <input 
+              type="radio" 
+              name="period" 
+              value="Mois" 
+              [(ngModel)]="selectedPeriod"
+              (change)="onPeriodChange()"
+            />
+            <span>Mois</span>
+          </label>
+          <label>
+            <input 
+              type="radio" 
+              name="period" 
+              value="Trimestre" 
+              [(ngModel)]="selectedPeriod"
+              (change)="onPeriodChange()"
+            />
+            <span>Trimestre</span>
+          </label>
+          <label>
+            <input 
+              type="radio" 
+              name="period" 
+              value="Année" 
+              [(ngModel)]="selectedPeriod"
+              (change)="onPeriodChange()"
+            />
+            <span>Année</span>
+          </label>
+        </div>
+
+        <div class="chart-container">
+          <canvas #ratesChart id="ratesChart"></canvas>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- Docs View -->
+  <div *ngIf="currentView === 'docs'" class="docs-page">
+    <section>
+      <h2>Documentation API BCE Exchange Rates</h2>
+      
+      <h3>Endpoints Disponibles</h3>
+      
+      <h3>1. Health Check</h3>
+      <pre><code>GET /api/health</code></pre>
+      <p>Vérifie l'état du service.</p>
+      <p><strong>Réponse:</strong></p>
+      <pre><code>{{ '{' }}
+  "status": "ok",
+  "timestamp": "2025-12-07T00:21:23.508Z"
+{{ '}' }}</code></pre>
+
+      <h3>2. Taux de Change Actuels</h3>
+      <pre><code>GET /api/bce-exchange?currencies=CHF,USD,GBP&date=2025-12-07</code></pre>
+      <p><strong>Query Parameters:</strong></p>
+      <ul>
+        <li><code>currencies</code> (requis): Codes de devises séparés par virgule</li>
+        <li><code>date</code> (optionnel): Date au format YYYY-MM-DD. Si omis, retourne la dernière valeur disponible</li>
+      </ul>
+      <p><strong>Réponse:</strong></p>
+      <pre><code>{{ '{' }}
+  "status": "success",
+  "date": "2025-12-07",
+  "base": "EUR",
+  "rates": [
+    {{ '{' }}
+      "currency": "CHF",
+      "rate": 0.9365,
+      "flag": "ch"
+    {{ '}' }},
+    {{ '{' }}
+      "currency": "USD",
+      "rate": 1.0512,
+      "flag": "us"
+    {{ '}' }}
+  ],
+  "source": "European Central Bank (ECB)",
+  "referenceBase": "EUR",
+  "queriedAt": "2025-12-07T00:21:23.508Z"
+{{ '}' }}</code></pre>
+
+      <h3>3. Historique des Taux</h3>
+      <pre><code>GET /api/bce-exchange/history?currencies=CHF,USD&start=2024-12-07&end=2025-12-07</code></pre>
+      <p><strong>Query Parameters:</strong></p>
+      <ul>
+        <li><code>currencies</code> (requis): Codes de devises séparés par virgule</li>
+        <li><code>start</code> (requis): Date de début au format YYYY-MM-DD</li>
+        <li><code>end</code> (requis): Date de fin au format YYYY-MM-DD</li>
+      </ul>
+      <p><strong>Réponse:</strong></p>
+      <pre><code>{{ '{' }}
+  "status": "success",
+  "start": "2024-12-07",
+  "end": "2025-12-07",
+  "referenceBase": "EUR",
+  "source": "European Central Bank (ECB)",
+  "queriedAt": "2025-12-07T00:21:23.508Z",
+  "data": [
+    {{ '{' }}
+      "currency": "CHF",
+      "date": "2024-12-07",
+      "rate": 0.9365
+    {{ '}' }},
+    {{ '{' }}
+      "currency": "CHF",
+      "date": "2024-12-08",
+      "rate": 0.9370
+    {{ '}' }}
+  ]
+{{ '}' }}</code></pre>
+
+      <h3>Devises Disponibles</h3>
+      <p>USD, GBP, CHF, JPY, CAD, AUD, NZD, SEK, NOK, DKK, PLN, CZK, HUF, RON, BGN, HRK, RUB, TRY, BRL, CNY, HKD, IDR, ILS, INR, KRW, MXN, MYR, PHP, SGD, THB, ZAR</p>
+
+      <h3>Gestion des Erreurs</h3>
+      <p>En cas d'erreur, l'API retourne:</p>
+      <pre><code>{{ '{' }}
+  "status": "error",
+  "message": "Description de l'erreur",
+  "ecbRequestUrl": "URL de la requête ECB (si applicable)"
+{{ '}' }}</code></pre>
+
+      <h3>Source des Données</h3>
+      <p>Les données proviennent de l'API officielle de la Banque Centrale Européenne (ECB):</p>
+      <p><code>https://data-api.ecb.europa.eu</code></p>
+      <p><strong>Note:</strong> Les données peuvent avoir 1-3 jours de retard selon la publication de la BCE.</p>
+    </section>
+  </div>
+</main>
+

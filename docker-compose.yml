@@ -1,24 +1,49 @@
-version: '3'
-services:
-  streamlit:
-    build: .
-    ports:
-      - "8501:8501"
-    volumes:
-      - .:/app
-    command: streamlit run app.py --server.address=0.0.0.0 --server.port=8501
-    environment:
-      - STREAMLIT_SERVER_PORT=8501
-      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+version: '3.8'
 
+services:
   api:
-    build: .
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: bce-api
     ports:
       - "8000:8000"
-    volumes:
-      - .:/app
-    # Use uvicorn with --reload to enable hot-reload when source changes
-    command: uvicorn api:app --host 0.0.0.0 --port 8000 --reload
     environment:
-      - API_HOST=0.0.0.0
-      - API_PORT=8000
+      - NODE_ENV=development
+      - PORT=8000
+      - HOST=0.0.0.0
+    networks:
+      - bce-network
+    volumes:
+      - ./backend/src:/app/src
+      - ./backend/package.json:/app/package.json:ro
+    command: npm run dev
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: development
+    container_name: bce-frontend
+    ports:
+      - "4200:4200"
+    depends_on:
+      - api
+    networks:
+      - bce-network
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      - ./frontend/angular.json:/app/angular.json:ro
+      - ./frontend/tsconfig.json:/app/tsconfig.json:ro
+      - ./frontend/tsconfig.app.json:/app/tsconfig.app.json:ro
+      - ./frontend/proxy.conf.json:/app/proxy.conf.json:ro
+      - ./frontend/package.json:/app/package.json:ro
+    environment:
+      - NODE_ENV=development
+    restart: unless-stopped
+
+networks:
+  bce-network:
+    driver: bridge

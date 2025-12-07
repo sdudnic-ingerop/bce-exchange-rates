@@ -1,19 +1,34 @@
-FROM python:3.12-slim
+# Multi-stage build: Angular frontend + Fastify backend
 
-WORKDIR /app
+# 1) Frontend build
+FROM node:20-alpine AS frontend-builder
+WORKDIR /app/frontend
+COPY frontend/package*.json ./
+RUN npm ci
+COPY frontend/ .
+RUN npm run build -- --configuration=production
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir --root-user-action=ignore -r requirements.txt
+# 2) Backend build
+FROM node:20-alpine AS backend-builder
+WORKDIR /app/backend
+COPY backend/package*.json ./
+RUN npm ci
+COPY backend/ .
+RUN npm run build
 
-COPY . .
+# 3) Runtime
+FROM node:20-alpine
+ENV NODE_ENV=production
+WORKDIR /app/backend
 
-# Créer un dossier static pour servir les assets
-RUN mkdir -p /app/static && cp -r /app/assets/* /app/static/ 2>/dev/null || true
+# Backend runtime deps + build
+COPY --from=backend-builder /app/backend/node_modules ./node_modules
+COPY --from=backend-builder /app/backend/dist ./dist
+COPY --from=backend-builder /app/backend/package*.json ./
 
-# Make startup scripts executable
-RUN chmod +x /app/start-railway.sh
+# Frontend build served statically by Fastify
+COPY --from=frontend-builder /app/frontend/dist/bce-exchange-ui ./public
 
-EXPOSE 8501 8000
+EXPOSE 8000
 
-# Default: Render (single port) - just Streamlit
-CMD ["streamlit", "run", "app.py", "--server.address=0.0.0.0"]
+CMD ["node", "./dist/server.js"]

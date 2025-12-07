@@ -63,31 +63,37 @@ Application Streamlit permettant de consulter les taux de change de la Banque Ce
 - **date** (optionnel) : Date au format `YYYY-MM-DD` (par défaut: aujourd'hui)
 
 ### Réponse (Succès)
+Les réponses de l'API incluent maintenant des métadonnées sur la source, la base de référence et l'horodatage de la requête.
+
 ```json
 {
   "status": "success",
   "date": "2025-12-04",
-  "date_requested": "2025-12-04",
+  "base": "EUR",
   "rates": [
-    {"devise": "CHF", "taux": 0.9345},
-    {"devise": "EUR", "taux": 1.0},
-    {"devise": "USD", "taux": 1.1234}
-  ]
+    {"currency": "CHF", "rate": 0.9345, "flag": "ch"},
+    {"currency": "EUR", "rate": 1.0, "flag": "eu"},
+    {"currency": "USD", "rate": 1.1234, "flag": "us"}
+  ],
+  "source": "European Central Bank (ECB)",
+  "referenceBase": "EUR",
+  "queriedAt": "2025-12-06T12:34:56.789Z"
 }
 ```
 
 ### Réponse (Erreur)
+L'API renvoie désormais des payloads d'erreur structurés en JSON. Selon la configuration, le code HTTP peut être 200 (payload d'erreur) ou un code 5xx/4xx; le corps JSON doit être utilisé pour déterminer le détail de l'erreur.
+
 ```json
 {
   "status": "error",
-  "code": -1,
-  "message": "No data available for the specified date"
+  "message": "No data available for the specified date",
+  "ecbRequestUrl": "https://data-api.ecb.europa.eu/..."  // (optionnel : URL request envoyée à la BCE pour débogage)
 }
 ```
 
 ### Codes d'erreur
-- `-1` : Pas de données disponibles pour la date/devise
-- `-2` : Paramètres invalides (format devise, date, etc.)
+Les codes numériques spécifiques ne sont pas imposés par l'API. Les clients doivent s'appuyer sur le champ `status` ("success" / "error") et sur le contenu de `message` pour la logique métier. L'`ecbRequestUrl` peut être présent dans les réponses d'erreur pour faciliter le débogage.
 
 ### Exemples cURL
 ```bash
@@ -99,13 +105,12 @@ curl "http://localhost:8000/api/bce-exchange?currencies=EUR,MXN,GBP&date=2025-12
 ```
 
 ### Framework & Port
-- **Framework** : FastAPI + Uvicorn
+- **Framework** : Fastify (Node.js/TypeScript)
 - **Port** : 8000 (configurable)
-- **Dépendances** : `fastapi`, `uvicorn`
+- **Dépendances** : Node.js, Fastify
 
-## Infrastructure
-- **Framework principal** : Streamlit
-- **API REST** : FastAPI + Uvicorn
+- **Framework principal** : Streamlit (UI historique du projet)
+- **API REST** : Fastify (Node.js/TypeScript)
 - **Conteneurisation** : Docker + Docker Compose
 - **Image de base** : `python:3.12-slim`
 - **Ports** : 

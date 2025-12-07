@@ -71,7 +71,7 @@
 
 - **Notes & troubleshooting:**
 
-  - Source is mounted into the container so code edits normally apply immediately; if not, rebuild with `--build`.
+  - **HOT RELOAD ACTIVE**: Source files are mounted into the container with live reload enabled. CSS and Python code changes apply **immediately** without any Docker restart. **NEVER** run `docker-compose restart`, `docker-compose down`, `docker-compose build` or similar commands — these break development workflow. Changes to `style.css`, `app.py`, `api.py` and other mounted files are automatically reflected in the running containers.
   - If a port is already bound, stop the process using it (Windows: use `Get-Process`/`Stop-Process` or `netstat -ano`) or change ports in `docker-compose.yml`.
   - Use `docker-compose down --volumes` if you want to clear named volumes.
 
@@ -129,7 +129,13 @@ docker-compose logs -f api
 ## Flux de développement
 
 ### Développement Local (Docker)
+   This section provides everything required to run and test the project locally using Docker Compose.
 **Le développement se fait principalement via Docker en local.**
+   ## Docker (dev hot reload)
+   - Lancer: `docker-compose up --build`
+   - API (Fastify) tourne en watch via `npm run dev` avec volumes montés (`backend/src`).
+   - Front (Angular) tourne en `ng serve --poll 2000` avec volumes montés (`frontend/src`).
+   - Relancer `--build` si package.json / angular.json / scripts changent.
 
 1. Modifier le code Python (`app.py` ou `api.py`)
 2. Lancer l'environnement : `docker-compose up`
