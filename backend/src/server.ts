@@ -24,11 +24,11 @@ await fastify.register(cors, {
   methods: ['GET', 'POST', 'OPTIONS']
 });
 
-// Static files
+// Static files - Angular app
 await fastify.register(fastifyStatic, {
   root: path.join(__dirname, '../public'),
   prefix: '/',
-  index: ['index.html']
+  decorateReply: false
 });
 
 // Initialize services

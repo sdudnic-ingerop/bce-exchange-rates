@@ -12,8 +12,8 @@ export function setupRoutes(
   rateLimiter: RateLimiterService,
   ecbService: ECBService
 ) {
-  // Root endpoint
-  fastify.get('/', async () => ({
+  // API info endpoint (moved from root to avoid conflict with static files)
+  fastify.get('/api', async () => ({
     service: 'BCE Exchange Rates API',
     version: '1.0.0',
     endpoints: {
