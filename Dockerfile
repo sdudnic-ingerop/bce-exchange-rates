@@ -27,7 +27,7 @@ COPY --from=backend-builder /app/backend/dist ./dist
 COPY --from=backend-builder /app/backend/package*.json ./
 
 # Frontend build served statically by Fastify
-COPY --from=frontend-builder /app/frontend/dist/bce-exchange-ui ./public
+COPY --from=frontend-builder /app/frontend/dist/frontend/browser ./public
 
 EXPOSE 8000
 
