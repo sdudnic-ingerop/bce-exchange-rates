@@ -44,8 +44,12 @@ Application Streamlit permettant de consulter les taux de change de la Banque Ce
 ## Source de données
 - **API** : ECB Data API (Banque Centrale Européenne)
 - **Endpoint** : `https://data-api.ecb.europa.eu/service/data/EXR/D..EUR.SP00.A`
-- **Format** : CSV
+- **Format** : CSV / JSON
 - **Mise en cache** : 3600 secondes (1 heure)
+- **Documentation de l'API ECB** :
+  - [Vue d'ensemble](https://data.ecb.europa.eu/help/api/overview)
+  - [Documentation Data API](https://data.ecb.europa.eu/help/api/data)
+  - [Astuces et exemples](https://data.ecb.europa.eu/help/api/useful-tips)
 
 ## Design & Typographie
 - **Police par défaut** : Arial 10pt
