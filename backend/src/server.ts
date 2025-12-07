@@ -20,15 +20,8 @@ const fastify = Fastify({
 
 // CORS configuration
 await fastify.register(cors, {
-  origin: ['http://localhost:4200', 'http://localhost:8501'],
+  origin: true, // Allow all origins in production
   methods: ['GET', 'POST', 'OPTIONS']
-});
-
-// Static files - Angular app
-await fastify.register(fastifyStatic, {
-  root: path.join(__dirname, '../public'),
-  prefix: '/',
-  decorateReply: false
 });
 
 // Initialize services
@@ -37,8 +30,15 @@ const rateLimiter = new RateLimiterService(fastify.log);
 const csvService = new CSVService(fastify.log);
 const ecbService = new ECBService(fastify.log, redisService, rateLimiter, csvService);
 
-// Setup routes
+// Setup API routes FIRST (before static files)
 setupRoutes(fastify, redisService, rateLimiter, ecbService);
+
+// Static files - Angular app (registered AFTER routes so /api/* takes precedence)
+await fastify.register(fastifyStatic, {
+  root: path.join(__dirname, '../public'),
+  prefix: '/',
+  decorateReply: false
+});
 
 // Start server
 const start = async () => {
