@@ -8,7 +8,11 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatButtonModule } from '@angular/material/button';
+import { MatDatepickerModule } from '@angular/material/datepicker';
+import { MatNativeDateModule, DateAdapter, MAT_DATE_FORMATS } from '@angular/material/core';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { Chart, ChartConfiguration, registerables } from 'chart.js';
+import { FrenchDateAdapter, FRENCH_DATE_FORMATS } from './date-adapter';
 
 Chart.register(...registerables);
 
@@ -51,10 +55,17 @@ interface HistoryResponse {
     MatFormFieldModule,
     MatInputModule,
     MatAutocompleteModule,
-    MatButtonModule
+    MatButtonModule,
+    MatDatepickerModule,
+    MatNativeDateModule,
+    MatTooltipModule
   ],
   templateUrl: './app.component.html',
-  styleUrls: ['./app.component.css']
+  styleUrls: ['./app.component.scss'],
+  providers: [
+    { provide: DateAdapter, useClass: FrenchDateAdapter },
+    { provide: MAT_DATE_FORMATS, useValue: FRENCH_DATE_FORMATS }
+  ]
 })
 export class AppComponent implements OnInit, AfterViewInit {
   @ViewChild('ratesChart', { static: false }) chartCanvas?: ElementRef<HTMLCanvasElement>;
@@ -71,13 +82,50 @@ export class AppComponent implements OnInit, AfterViewInit {
     'PLN', 'CZK', 'HUF', 'RON', 'BGN', 'HRK', 'RUB', 'TRY', 'BRL', 'CNY',
     'HKD', 'IDR', 'ILS', 'INR', 'KRW', 'MXN', 'MYR', 'PHP', 'SGD', 'THB', 'ZAR'
   ];
+
+  // Map currency code to French country name (used for search by country)
+  currencyToCountry: { [code: string]: string } = {
+    'USD': 'États-Unis',
+    'GBP': 'Royaume-Uni',
+    'CHF': 'Suisse',
+    'JPY': 'Japon',
+    'CAD': 'Canada',
+    'AUD': 'Australie',
+    'NZD': 'Nouvelle-Zélande',
+    'SEK': 'Suède',
+    'NOK': 'Norvège',
+    'DKK': 'Danemark',
+    'PLN': 'Pologne',
+    'CZK': 'République Tchèque',
+    'HUF': 'Hongrie',
+    'RON': 'Roumanie',
+    'BGN': 'Bulgarie',
+    'HRK': 'Croatie',
+    'RUB': 'Russie',
+    'TRY': 'Turquie',
+    'BRL': 'Brésil',
+    'CNY': 'Chine',
+    'HKD': 'Hong Kong',
+    'IDR': 'Indonésie',
+    'ILS': 'Israël',
+    'INR': 'Inde',
+    'KRW': 'Corée du Sud',
+    'MXN': 'Mexique',
+    'MYR': 'Malaisie',
+    'PHP': 'Philippines',
+    'SGD': 'Singapour',
+    'THB': 'Thaïlande',
+    'ZAR': 'Afrique du Sud'
+  };
   
   // State
   selectedCurrencies: string[] = ['CHF', 'MXN'];
-  selectedDate: string = '';
+  selectedDate: Date = new Date();
+  maxDate: Date = new Date();
   selectedPeriod: string = 'Année';
   currencyFilter: string = '';
   currentView: 'home' | 'docs' = 'home';
+  docsUrl: string = '';
   
   // Data
   exchangeRates: ExchangeRate[] = [];
@@ -91,26 +139,29 @@ export class AppComponent implements OnInit, AfterViewInit {
   chart: Chart | null = null;
   chartRetryCount: number = 0;
   private viewInitialized: boolean = false;
+  private isInitializing: boolean = true;
   
   ngOnInit() {
-    // Set date to Friday (5 days back from Sunday, 3 from Saturday, 2 from Friday)
-    const today = new Date();
-    const dayOfWeek = today.getDay(); // 0=Sunday, 6=Saturday
-    let daysBack = 0;
+    // Set maxDate to today
+    this.maxDate = new Date();
     
-    if (dayOfWeek === 0) daysBack = 2; // Sunday -> Friday
-    else if (dayOfWeek === 6) daysBack = 1; // Saturday -> Friday
+    // Set date to 05/12/2025 (5 décembre 2025)
+    // Create explicitly: December 5, 2025 at midnight UTC
+    this.selectedDate = new Date(2025, 11, 5, 0, 0, 0, 0);
     
-    const targetDate = new Date();
-    targetDate.setDate(targetDate.getDate() - daysBack);
-    this.selectedDate = targetDate.toISOString().split('T')[0];
+    // Set docs URL
+    this.docsUrl = this.buildApiUrl('/docs');
+    
+    console.log('Initial date set to:', this.formatDateForDisplay(this.selectedDate), 'ISO:', this.selectedDate.toISOString());
   }
   
   ngAfterViewInit() {
     this.viewInitialized = true;
-    // Load data with the pre-calculated date
+    this.isInitializing = false;
+    
+    // Load data with the initial selected date
     setTimeout(() => {
-      console.log('Loading data for date:', this.selectedDate);
+      console.log('Starting data load with date:', this.formatDateForDisplay(this.selectedDate));
       this.fetchRatesWithValidation();
     }, 0);
   }
@@ -134,11 +185,20 @@ export class AppComponent implements OnInit, AfterViewInit {
   }
   
   // Currency Selection Methods
+  // Returns filtered options based on search
   get filteredCurrencies(): string[] {
-    const filter = this.currencyFilter.toUpperCase();
-    return this.availableCurrencies.filter(c => 
-      c.includes(filter) && !this.selectedCurrencies.includes(c)
-    );
+    const filter = (this.currencyFilter || '').trim().toLowerCase();
+    if (!filter) {
+      // Return all available currencies not yet selected
+      return this.availableCurrencies.filter(c => !this.selectedCurrencies.includes(c));
+    }
+
+    // Filter by currency code or French country name
+    return this.availableCurrencies.filter(c => {
+      if (this.selectedCurrencies.includes(c)) return false;
+      const country = this.currencyToCountry[c] || '';
+      return c.toLowerCase().includes(filter) || country.toLowerCase().includes(filter);
+    });
   }
   
   addCurrency(currency: string) {
@@ -156,10 +216,10 @@ export class AppComponent implements OnInit, AfterViewInit {
   
   removeCurrency(currency: string) {
     const index = this.selectedCurrencies.indexOf(currency);
-    if (index >= 0) { && this.selectedDate) {
-        this.fetchRatesWithValidationencies.splice(index, 1);
-      if (this.selectedCurrencies.length > 0) {
-        this.fetchRates();
+    if (index >= 0) {
+      this.selectedCurrencies.splice(index, 1);
+      if (this.selectedCurrencies.length > 0 && this.selectedDate) {
+        this.fetchRatesWithValidation();
       } else {
         this.error = 'Veuillez sélectionner au moins une devise';
         this.exchangeRates = [];
@@ -177,11 +237,22 @@ export class AppComponent implements OnInit, AfterViewInit {
   }
   
   selectCurrency(currency: string) {
-    this.addCurrency(currency);
+    // currency is the currency code (e.g., 'CHF')
+    const code = currency.toUpperCase().trim();
+    if (this.availableCurrencies.includes(code) && !this.selectedCurrencies.includes(code)) {
+      this.selectedCurrencies = [...this.selectedCurrencies, code];
+      this.currencyFilter = '';
+      if (this.selectedDate) {
+        this.fetchRatesWithValidation();
+      }
+    }
   }
   
   // Date Selection
   onDateChange() {
+    // Skip during initialization to avoid unwanted API calls
+    if (this.isInitializing) return;
+    
     // Validate date availability when user changes it
     this.fetchRatesWithValidation();
   }
@@ -196,22 +267,30 @@ export class AppComponent implements OnInit, AfterViewInit {
     this.error = null;
     
     const currencies = this.selectedCurrencies.join(',');
-    const dateParam = this.selectedDate ? `&date=${this.selectedDate}` : '';
+    // If user selected a date different from today, use it; otherwise fetch latest
+    const dateStr = this.formatDateForApi(this.selectedDate);
+    const isInitialLoad = dateStr === this.formatDateForApi(new Date()); // Approx check
+    
+    // Build URL - if initial load, don't specify date to get latest observations
+    const dateParam = !isInitialLoad && dateStr ? `&date=${dateStr}` : '';
     const url = this.buildApiUrl(`/api/bce-exchange?currencies=${currencies}${dateParam}`);
     
-    console.log('Fetching from URL:', url);
+    console.log('Fetching from:', url);
     
     this.http.get<ExchangeResponse>(url).subscribe({
       next: (data) => {
         console.log('API Response:', data);
         if (data.status === 'error') {
-          this.error = `Aucune donnée disponible pour le ${this.selectedDate}. Les données ECB peuvent ne pas être disponibles le weekend ou les jours fériés.`;
+          this.error = `Erreur: ${data.message}`;
           this.exchangeRates = [];
           this.historyData = [];
         } else {
+          // Update selectedDate to the actual date returned
+          const returnedDate = new Date(data.date);
+          this.selectedDate = returnedDate;
           this.error = null;
           this.exchangeRates = data.rates;
-          console.log('Exchange rates loaded:', this.exchangeRates);
+          console.log('Exchange rates loaded for date:', data.date, this.exchangeRates);
           this.fetchHistory();
         }
         this.loading = false;
@@ -236,7 +315,8 @@ export class AppComponent implements OnInit, AfterViewInit {
     this.error = null;
     
     const currencies = this.selectedCurrencies.join(',');
-    const dateParam = this.selectedDate ? `&date=${this.selectedDate}` : '';
+    const dateStr = this.formatDateForApi(this.selectedDate);
+    const dateParam = dateStr ? `&date=${dateStr}` : '';
     const url = this.buildApiUrl(`/api/bce-exchange?currencies=${currencies}${dateParam}`);
     
     console.log('Fetching from URL:', url);
@@ -264,8 +344,8 @@ export class AppComponent implements OnInit, AfterViewInit {
   }
   
   fetchHistory() {
-    const endDate = this.selectedDate || new Date().toISOString().split('T')[0];
-    const startDate = this.calculateStartDate(endDate);
+    const endDate = this.formatDateForApi(this.selectedDate);
+    const startDate = this.calculateStartDate(this.selectedDate);
     
     const currencies = this.selectedCurrencies.join(',');
     const url = this.buildApiUrl(`/api/bce-exchange/history?currencies=${currencies}&start=${startDate}&end=${endDate}`);
@@ -288,16 +368,15 @@ export class AppComponent implements OnInit, AfterViewInit {
     });
   }
   
-  calculateStartDate(endDate: string): string {
-    const end = new Date(endDate);
+  calculateStartDate(endDate: Date): string {
     let days = 365; // Default: Année
     
     if (this.selectedPeriod === 'Mois') days = 30;
     else if (this.selectedPeriod === 'Trimestre') days = 90;
     
-    const start = new Date(end);
+    const start = new Date(endDate);
     start.setDate(start.getDate() - days);
-    return start.toISOString().split('T')[0];
+    return this.formatDateForApi(start);
   }
   
   // Period Selection
@@ -367,21 +446,29 @@ export class AppComponent implements OnInit, AfterViewInit {
         fill: true,
         tension: 0.4,
         yAxisID: `y${index}`,
-        pointRadius: 2,
+        pointRadius: 0,
         pointHoverRadius: 5
       };
     });
     
-    // Build Y axes
+    // Build Y axes - Adaptive based on number of currencies
     const yAxes: any = {};
-    const showAxes = this.selectedCurrencies.length <= 3;
+    const numCurrencies = this.selectedCurrencies.length;
+    
+    // Determine display strategy based on number of currencies
+    // 1-3 currencies: Show all axes with labels
+    // 4+ currencies: Hide axes but keep independent scales for accurate visualization
+    const showAxes = numCurrencies <= 3;
     
     this.selectedCurrencies.forEach((currency, index) => {
       const currencyData = datasetsByCurrency[currency] || [];
       const rates = currencyData.map(p => p.rate);
+      
+      if (rates.length === 0) return;
+      
       const min = Math.min(...rates);
       const max = Math.max(...rates);
-      const padding = (max - min) * 0.05;
+      const padding = (max - min) * 0.05 || 0.01; // Fallback padding if min === max
       
       yAxes[`y${index}`] = {
         type: 'linear',
@@ -389,12 +476,18 @@ export class AppComponent implements OnInit, AfterViewInit {
         position: index % 2 === 0 ? 'left' : 'right',
         title: {
           display: showAxes,
-          text: currency
+          text: `${currency} (${min.toFixed(2)} - ${max.toFixed(2)})`
         },
         min: min - padding,
         max: max + padding,
         grid: {
-          drawOnChartArea: index === 0
+          drawOnChartArea: index === 0 // Only first axis draws grid lines
+        },
+        ticks: {
+          display: showAxes,
+          callback: function(value: any) {
+            return typeof value === 'number' ? value.toFixed(4) : value;
+          }
         }
       };
     });
@@ -449,8 +542,7 @@ export class AppComponent implements OnInit, AfterViewInit {
   exportCSV() {
     if (this.exchangeRates.length === 0) return;
     
-    const date = this.exchangeRates.length > 0 ? 
-      (this.selectedDate || new Date().toISOString().split('T')[0]) : '';
+    const date = this.formatDateForApi(this.selectedDate);
     
     let csv = 'Devise,Taux (EUR),Date\n';
     this.exchangeRates.forEach(rate => {
@@ -472,12 +564,39 @@ export class AppComponent implements OnInit, AfterViewInit {
   getCSVOutput(): string {
     if (this.exchangeRates.length === 0) return '';
     
-    const date = this.selectedDate || new Date().toISOString().split('T')[0];
+    const date = this.formatDateForApi(this.selectedDate);
     let csv = 'Devise,Taux (EUR),Date\n';
     this.exchangeRates.forEach(rate => {
       csv += `${rate.currency},${rate.rate.toFixed(4)},${date}\n`;
     });
     return csv;
+  }
+  
+  getApiRequestUrl(): string {
+    const currencies = this.selectedCurrencies.join(',');
+    const date = this.formatDateForApi(this.selectedDate);
+    const baseUrl = this.apiBase ? `${this.apiBase}/api/bce-exchange` : '/api/bce-exchange';
+    return `${baseUrl}?currencies=${currencies}&date=${date}`;
+  }
+  
+  getApiResponseExample(): string {
+    if (this.exchangeRates.length === 0) return '';
+    
+    const response = {
+      status: 'success',
+      date: this.formatDateForApi(this.selectedDate),
+      base: 'EUR',
+      rates: this.exchangeRates.map(rate => ({
+        currency: rate.currency,
+        rate: rate.rate,
+        flag: rate.flag
+      })),
+      source: 'European Central Bank (ECB)',
+      referenceBase: 'EUR',
+      queriedAt: new Date().toISOString()
+    };
+    
+    return JSON.stringify(response, null, 2);
   }
   
   // Navigation
@@ -488,13 +607,72 @@ export class AppComponent implements OnInit, AfterViewInit {
     }
   }
   
+  // Open Scalar API Documentation
+  openApiDocs() {
+    window.open('/api/docs', '_blank');
+  }
+  
   // Helper methods
   getRateDate(): string {
-    return this.selectedDate || new Date().toISOString().split('T')[0];
+    return this.formatDateForApi(this.selectedDate);
+  }
+  
+  formatDateForApi(date: Date): string {
+    if (!date) return '';
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  
+  formatDateForDisplay(date: Date): string {
+    if (!date) return '';
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${day}/${month}/${year}`; // French format: dd/mm/yyyy
   }
   
   getFlagUrl(flag: string): string {
     return `https://flagcdn.com/24x18/${flag}.png`;
+  }
+
+  getCurrencyFlag(currency: string): string {
+    // Map currencies to flag codes
+    const flagMap: { [key: string]: string } = {
+      'USD': 'us',
+      'GBP': 'gb',
+      'CHF': 'ch',
+      'JPY': 'jp',
+      'CAD': 'ca',
+      'AUD': 'au',
+      'NZD': 'nz',
+      'SEK': 'se',
+      'NOK': 'no',
+      'DKK': 'dk',
+      'PLN': 'pl',
+      'CZK': 'cz',
+      'HUF': 'hu',
+      'RON': 'ro',
+      'BGN': 'bg',
+      'HRK': 'hr',
+      'RUB': 'ru',
+      'TRY': 'tr',
+      'BRL': 'br',
+      'CNY': 'cn',
+      'HKD': 'hk',
+      'IDR': 'id',
+      'ILS': 'il',
+      'INR': 'in',
+      'KRW': 'kr',
+      'MXN': 'mx',
+      'MYR': 'my',
+      'PHP': 'ph',
+      'SGD': 'sg',
+      'THB': 'th',
+      'ZAR': 'za'
+    };
+    return flagMap[currency] || 'eu';
   }
 
   private filterLabelsToMonths(dates: string[]): string[] {

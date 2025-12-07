@@ -74,13 +74,14 @@ HKD, IDR, ILS, INR, KRW, MXN, MYR, PHP, SGD, THB, ZAR
 
 ### 3.2 Sélection de la date
 
-**Composant**: Input HTML5 `type="date"`
+**Composant**: Material Datepicker avec input Material
 
 **Comportement**:
-- Date par défaut: vide (l'API retourne la date la plus récente disponible)
-- Maximum: date du jour
-- Format: YYYY-MM-DD
+- Date par défaut: Date du dernier jour ouvrable (vendredi si weekend)
+- Maximum: date du jour (`maxDate`)
+- Format: Date object converti en YYYY-MM-DD pour l'API
 - Changement de date → appel API immédiat pour rafraîchir les taux
+- Interface Material avec icône calendrier et sélection visuelle
 
 **Contrainte ECB**: Les données peuvent avoir 1-3 jours de retard (publication J-1 ou J-2)
 
@@ -90,13 +91,14 @@ HKD, IDR, ILS, INR, KRW, MXN, MYR, PHP, SGD, THB, ZAR
 
 **Colonnes**:
 1. **Devise**: Drapeau (24x18px de flagcdn.com) + code ISO
-2. **Taux EUR**: Valeur numérique formatée à 4 décimales
+2. **Taux EUR**: Valeur numérique formatée à 4 décimales, ou "-" si donnée manquante
 
 **Comportement**:
 - Tri alphabétique par code devise
 - Drapeaux dynamiques via `https://flagcdn.com/24x18/{code}.png`
 - Mapping spécial: EUR → flag "eu", sinon 2 premières lettres en minuscules
 - Affichage uniquement si `!loading && exchangeRates.length > 0`
+- **Gestion des données manquantes**: Si `rate === null` ou `rate === undefined`, affiche "-"
 
 **Header du tableau**: "Taux (YYYY-MM-DD)" avec la date effective
 
@@ -136,15 +138,18 @@ MXN,21.1912,2025-12-07
 - **Année**: 365 derniers jours (sélection par défaut)
 
 **Calcul de la période**:
-- Date fin: `selectedDate` ou date du jour si vide
+- Date fin: `selectedDate` (Date object)
 - Date début: date fin - période sélectionnée
 
 **Comportement du graphique**:
-- **Multi-axes Y**: 1 axe par devise pour échelles indépendantes
+- **Multi-axes Y adaptatifs**: 1 axe par devise pour échelles indépendantes
   - Axes pairs (0, 2, 4...) → gauche
   - Axes impairs (1, 3, 5...) → droite
-- **Padding dynamique**: 5% du range min-max pour chaque axe
-- **Axes visibles**: Seulement si ≤ 3 devises (sinon masqués pour clarté)
+  - Échelles min-max automatiques basées sur les données réelles
+  - Titres des axes affichent la devise et la plage (ex: "CHF (0.93 - 0.95)")
+- **Padding dynamique**: 5% du range min-max pour chaque axe (ou 0.01 si min === max)
+- **Axes visibles**: Seulement si ≤ 3 devises (sinon masqués pour clarté, mais échelles maintenues)
+- **Affichage optimisé**: Les valeurs sont affichées avec 4 décimales dans les tooltips
 - **Couleurs**: 5 couleurs prédéfinies cycliques:
   1. Bleu: `rgba(52, 152, 219, 0.16)` / border `rgba(52, 152, 219, 1)`
   2. Rouge: `rgba(231, 76, 60, 0.16)` / border `rgba(231, 76, 60, 1)`
@@ -411,7 +416,8 @@ D.{CURRENCY1+CURRENCY2}.EUR.SP00.A?format=jsondata&startPeriod={START}&endPeriod
 exchangeRates: ExchangeRate[] = []
 historyData: HistoryPoint[] = []
 selectedCurrencies: string[] = ['CHF', 'MXN']
-selectedDate: string = ''  // Empty = API returns latest
+selectedDate: Date = new Date()  // Date object, initialized to last business day
+maxDate: Date = new Date()  // Maximum selectable date
 selectedPeriod: string = 'Année'
 
 // UI States
@@ -423,6 +429,7 @@ currencyFilter: string = ''  // Autocomplete search
 // Chart
 chart: Chart | null = null
 chartRetryCount: number = 0
+viewInitialized: boolean = false
 ```
 
 ### 6.2 Flux de données
@@ -483,6 +490,8 @@ chartRetryCount: number = 0
 - `MatInputModule`
 - `MatAutocompleteModule`
 - `MatButtonModule`
+- `MatDatepickerModule`
+- `MatNativeDateModule`
 
 **Providers**:
 ```typescript

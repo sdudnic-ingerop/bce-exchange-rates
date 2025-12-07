@@ -18,21 +18,45 @@
 - **Frontend** (`frontend/src/`): Structure Angular standard avec `app/components/` et `app/services/`
 
 ### Docker et Développement
-- **Développement local**: Tout avec Docker et docker-compose
-- Ne rien installer localement (Node.js, npm, Python, etc.)
-- Docker Desktop obligatoire pour tous les développeurs
- - **Développement local**: Tout avec Docker et docker-compose. Les contributeurs ne doivent PAS installer de dépendances ou d'outils localement.
- - Ne rien installer localement (Node.js, npm, Python, etc.). Les agents et la documentation doivent **toujours** proposer des commandes Docker/docker-compose ou des instructions compatibles Docker.
- - Docker Desktop obligatoire pour tous les développeurs
-- **Plateforme / OS**: Le développement est réalisé principalement sous Windows. Certains comportements (affichage d'émojis, chemins, permissions, commandes shell) peuvent différer sous Linux/macOS. Indiquer explicitement les commandes alternatives si nécessaire.
-- **Agents / appels automatiques**: Les agents automatisés (par ex. bots/agents VS Code) ne doivent pas proposer des scripts batch/PowerShell qu'ils ne peuvent pas exécuter automatiquement. Lorsqu'un agent propose une commande, indiquer si elle requiert une interaction humaine, des permissions supplémentaires ou l'utilisation d'un terminal spécifique.
-- **Hot Reload**: Configurer les volumes Docker pour éviter les rebuilds
-  - Backend: `nodemon` pour reload automatique
-  - Frontend: Dev server Angular avec live reload
-  
-IMPORTANT POUR LES AGENTS:
-- Ne jamais suggérer ou recommander d'installer Node.js, npm, Python ou d'autres dépendances sur la machine hôte du développeur. Toutes les commandes proposées par des agents doivent être réalisables via Docker / docker-compose. Si une action nécessite un outil non disponible dans un conteneur, l'agent doit proposer une solution basée sur un conteneur temporaire ou demander l'autorisation explicite de modifier le `Dockerfile`.
-- Lorsque vous fournissez des commandes, fournissez exclusivement des commandes `docker-compose` ou `docker` et précisez si la commande modifie l'image (requiert `--build`) ou démarre un conteneur en mode développement (volumes montés).
+- **Développement UNIQUEMENT avec Docker et docker-compose** - Aucune installation locale
+- ❌ **JAMAIS** installer Node.js, npm, Python, ou toute autre dépendance sur la machine hôte
+- ✅ **Docker Desktop obligatoire** pour tous les développeurs
+- ✅ Toutes les commandes proposées par les agents doivent être via `docker-compose` ou `docker`
+- ✅ Les volumes Docker sont configurés pour hot-reload automatique :
+  - Backend: `tsx watch` (équivalent nodemon pour TypeScript) - rebuild automatique au changement de fichier
+  - Frontend: Dev server Angular avec `--poll=2000` (polling activé) - rechargement automatique du navigateur
+- ✅ Les changements de code dans `src/` se reflètent **immédiatement** dans le conteneur sans rebuild d'image
+- ✅ **Aucun redémarrage du conteneur nécessaire** - les changements sont détectés automatiquement
+- ✅ Communication inter-services: utiliser les noms de services Docker (`http://api:8000`, `http://frontend:4200`)
+
+**Commandes essentielles (UNIQUEMENT Docker):**
+```bash
+# Lancer l'environnement complet
+docker-compose up --build
+
+# Stopper l'environnement
+docker-compose down
+
+# Logs en temps réel
+docker-compose logs -f
+
+# Exécuter une commande dans un conteneur
+docker-compose exec api npm run dev
+docker-compose exec frontend ng serve
+```
+
+**Plateforme / OS**: Le développement est réalisé principalement sous Windows avec PowerShell. 
+- ❌ **NE JAMAIS** utiliser de commandes Linux/Bash comme `tail`, `head`, `grep`, `ls`, `cat`, etc. dans les commandes PowerShell
+- ✅ **TOUJOURS** utiliser des équivalents PowerShell : `Get-Content`, `Select-Object -First/-Last`, `Where-Object`, `Get-ChildItem`, etc.
+- ✅ Les chemins Windows utilisent `\` ou `/` (les deux marchent dans PowerShell)
+- ✅ Toutes les commandes doivent être compatibles PowerShell natif
+
+**IMPORTANT POUR LES AGENTS:**
+- ❌ Ne JAMAIS suggérer d'installer Node.js, npm, Python ou d'autres dépendances sur la machine hôte
+- ❌ Ne JAMAIS proposer des commandes locales comme `npm install`, `python setup.py`, `npm run build` en dehors de Docker
+- ✅ Toutes les commandes doivent être dans des conteneurs Docker
+- ✅ Si une action nécessite un outil non disponible dans un conteneur, proposer une solution basée sur un conteneur temporaire ou modifier le `Dockerfile`
+- ✅ Toujours préciser si la commande modifie l'image (requiert `--build`) ou démarre un conteneur en mode développement (volumes montés)
 
 ### Git et Commits
 

@@ -20,12 +20,12 @@ export function setupRoutes(
       health: 'GET /api/health',
       rates: 'GET /api/bce-exchange?currencies=USD,CHF&date=2025-12-06',
       history: 'GET /api/bce-exchange/history?currencies=USD,CHF&start=2025-11-01&end=2025-12-06',
-      docs: 'GET /docs - Scalar API Documentation'
+      docs: 'GET /api/docs - Scalar API Documentation'
     }
   }));
 
-  // Scalar API Documentation
-  fastify.get('/docs', async (request, reply) => {
+  // Scalar API Documentation - Accessible at /api/docs
+  fastify.get('/api/docs', async (request, reply) => {
     reply.type('text/html');
     return `
 <!DOCTYPE html>
@@ -41,7 +41,7 @@ export function setupRoutes(
     type="application/json"
     data-configuration='${JSON.stringify({
       spec: {
-        url: '/openapi.json'
+        url: '/api/openapi.json'
       },
       servers: [
         {
@@ -61,7 +61,7 @@ export function setupRoutes(
   });
 
   // OpenAPI JSON endpoint
-  fastify.get('/openapi.json', async () => openApiSpec);
+  fastify.get('/api/openapi.json', async () => openApiSpec);
 
   // Health check endpoint
   fastify.get('/api/health', async () => {
@@ -102,7 +102,14 @@ export function setupRoutes(
     const currencyList = currencies.split(',').map(c => c.trim().toUpperCase());
 
     try {
-      const result = await ecbService.fetchRates(currencyList, date);
+      // If no date provided, fetch latest observations to find the most recent valid date
+      let result;
+      if (!date) {
+        fastify.log.info(`Fetching latest observations for currencies: ${currencyList.join(',')}`);
+        result = await ecbService.fetchLatestRates(currencyList);
+      } else {
+        result = await ecbService.fetchRates(currencyList, date);
+      }
       return result;
     } catch (error: any) {
       fastify.log.error({ err: error }, 'Error in /api/bce-exchange');

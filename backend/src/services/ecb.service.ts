@@ -105,7 +105,9 @@ class ECBService {
       const observations = data.dataSets?.[0]?.series || {};
       const dimensions = data.structure?.dimensions?.series || [];
       const currencyDim = dimensions.find((d: any) => d.id === 'CURRENCY')?.values || [];
+      const timeDim = data.structure?.dimensions?.observation?.find((d: any) => d.id === 'TIME_PERIOD')?.values || [];
       const rates: any[] = [];
+      let actualDate = date;
 
       Object.keys(observations).forEach((key) => {
         const parts = key.split(':');
@@ -116,7 +118,8 @@ class ECBService {
         if (currency && observations[key]?.observations) {
           const obsKeys = Object.keys(observations[key].observations);
           if (obsKeys.length > 0) {
-            const lastObs = observations[key].observations[obsKeys[obsKeys.length - 1]];
+            const lastObsIdx = obsKeys[obsKeys.length - 1];
+            const lastObs = observations[key].observations[lastObsIdx];
             const rate = lastObs?.[0];
             
             if (rate) {
@@ -125,12 +128,18 @@ class ECBService {
                 rate: parseFloat(rate),
                 flag: currencyFlags[currency] || 'xx'
               });
+              
+              // Extract actual date from response if using lastNObservations
+              if (!date && timeDim.length > 0) {
+                actualDate = timeDim[parseInt(lastObsIdx)]?.id || actualDate;
+              }
             }
           }
         }
       });
 
-      const dateUsed = date || new Date().toISOString().split('T')[0];
+      // Fallback to today's date if we couldn't extract it
+      const dateUsed = actualDate || new Date().toISOString().split('T')[0];
       const result = {
         status: 'success',
         date: dateUsed,
@@ -160,6 +169,11 @@ class ECBService {
       
       throw error;
     }
+  }
+
+  async fetchLatestRates(currencies: string[]): Promise<ExchangeResponse> {
+    // Fetch the latest available data using lastNObservations
+    return this.fetchRates(currencies);
   }
 
   async fetchHistory(currencies: string[], start: string, end: string): Promise<HistoryPoint[]> {

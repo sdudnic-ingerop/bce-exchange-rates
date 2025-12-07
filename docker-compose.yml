@@ -1,6 +1,15 @@
 version: '3.8'
 
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: bce-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - bce-network
+    restart: unless-stopped
+
   api:
     build:
       context: ./backend
@@ -8,10 +17,13 @@ services:
     container_name: bce-api
     ports:
       - "8000:8000"
+    depends_on:
+      - redis
     environment:
       - NODE_ENV=development
       - PORT=8000
       - HOST=0.0.0.0
+      - REDIS_URL=redis://redis:6379
     networks:
       - bce-network
     volumes:

@@ -1,1 +1,316 @@
-/* Component-specific styles are in global styles.css */
+/* Global Styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  font-family: 'Roboto', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #333;
+  background-color: #fafafa;
+}
+
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+/* Header Styles */
+header {
+  background: white;
+  border-bottom: 1px solid #ddd;
+  padding: 15px 0;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+header .header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+header .logo {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  text-decoration: none;
+  color: inherit;
+}
+
+header .logo img {
+  height: 40px;
+}
+
+header h1 {
+  font-size: 1.5em;
+  font-weight: 600;
+  color: #003399;
+}
+
+header nav {
+  display: flex;
+  gap: 20px;
+}
+
+header nav button {
+  background: none;
+  border: none;
+  padding: 10px 20px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #333;
+  transition: all 0.3s;
+  border-bottom: 2px solid transparent;
+}
+
+header nav button:hover {
+  background: #f5f5f5;
+}
+
+header nav button.active {
+  border-bottom-color: #003399;
+  color: #003399;
+}
+
+/* Main Content */
+main {
+  padding: 20px 0;
+}
+
+section {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+section h2 {
+  font-size: 1.3em;
+  font-weight: 600;
+  margin-bottom: 15px;
+  color: #003399;
+}
+
+/* Controls Section */
+.controls-section {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+/* Date Control with Material Datepicker */
+.date-control {
+  width: 100%;
+}
+
+.date-control .mat-mdc-form-field {
+  width: 100%;
+}
+
+/* Loading and Error Messages */
+.loading-message, .error-message {
+  padding: 15px;
+  border-radius: 4px;
+  margin: 15px 0;
+}
+
+.loading-message {
+  background: #e3f2fd;
+  color: #1976d2;
+  border-left: 4px solid #1976d2;
+}
+
+.error-message {
+  background: #ffebee;
+  color: #c62828;
+  border-left: 4px solid #c62828;
+}
+
+/* Content Grid */
+.content-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+/* Table Section */
+.table-section table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table-section thead {
+  background: #f5f5f5;
+}
+
+.table-section th {
+  padding: 12px;
+  text-align: left;
+  font-weight: 600;
+  color: #555;
+  border-bottom: 2px solid #ddd;
+}
+
+.table-section td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #eee;
+}
+
+.table-section .currency-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.table-section .currency-cell img {
+  width: 24px;
+  height: 18px;
+  border: 1px solid #ddd;
+}
+
+.table-section .rate-cell {
+  font-family: 'Courier New', monospace;
+  font-weight: 500;
+}
+
+/* Export Button */
+.export-button {
+  background: #003399;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.3s;
+  margin-bottom: 15px;
+}
+
+.export-button:hover:not(:disabled) {
+  background: #002266;
+}
+
+.export-button:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* CSV Output */
+.csv-output {
+  background: #f5f5f5;
+  padding: 15px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  white-space: pre;
+  overflow-x: auto;
+  margin-top: 15px;
+  border: 1px solid #ddd;
+}
+
+/* Chart Section */
+.chart-section {
+  min-height: 400px;
+}
+
+.period-selector {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.period-selector label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  padding: 8px 15px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  transition: all 0.3s;
+}
+
+.period-selector label:hover {
+  background: #f5f5f5;
+}
+
+.period-selector input[type="radio"]:checked + span {
+  font-weight: 600;
+  color: #003399;
+}
+
+.chart-container {
+  position: relative;
+  height: 400px;
+  width: 100%;
+}
+
+/* API Docs Page */
+.docs-page {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.docs-page h2 {
+  margin-top: 30px;
+  margin-bottom: 15px;
+}
+
+.docs-page h3 {
+  margin-top: 20px;
+  margin-bottom: 10px;
+  color: #555;
+}
+
+.docs-page pre {
+  background: #f5f5f5;
+  padding: 15px;
+  border-radius: 4px;
+  overflow-x: auto;
+  border-left: 4px solid #003399;
+}
+
+.docs-page code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+}
+
+.docs-page ul {
+  margin-left: 20px;
+  margin-bottom: 15px;
+}
+
+.docs-page li {
+  margin-bottom: 8px;
+}
+
+/* Material Overrides */
+.mat-mdc-form-field {
+  width: 100%;
+}
+
+.mat-mdc-chip-set {
+  width: 100%;
+}
+
+/* Responsive (basic) */
+@media (max-width: 768px) {
+  .controls-section {
+    grid-template-columns: 1fr;
+  }
+  
+  .content-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -28,36 +28,44 @@
           <mat-chip-grid #chipGrid>
             <mat-chip-row *ngFor="let currency of selectedCurrencies" 
                           (removed)="removeCurrency(currency)">
+              <img [src]="getFlagUrl(getCurrencyFlag(currency))" [alt]="currency" style="width: 20px; height: 15px; margin-right: 4px;">
               {{ currency }}
               <button matChipRemove>
                 <mat-icon>cancel</mat-icon>
               </button>
             </mat-chip-row>
             <input
-              placeholder="Ajouter une devise..."
+              placeholder="Chercher par code ou pays..."
               [matChipInputFor]="chipGrid"
               [(ngModel)]="currencyFilter"
               [matAutocomplete]="auto"
-              (keydown)="onCurrencyInput($event)"
             />
           </mat-chip-grid>
           <mat-autocomplete #auto="matAutocomplete" (optionSelected)="selectCurrency($event.option.value)">
-            <mat-option *ngFor="let currency of filteredCurrencies" [value]="currency">
-              {{ currency }}
+            <mat-option *ngFor="let code of filteredCurrencies" [value]="code">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <img [src]="getFlagUrl(getCurrencyFlag(code))" [alt]="code" style="width: 20px; height: 15px;">
+                <span><strong>{{ code }}</strong> — {{ currencyToCountry[code] }}</span>
+              </div>
             </mat-option>
           </mat-autocomplete>
         </mat-form-field>
       </div>
       
       <div class="date-control">
-        <label for="date-input">Date</label>
-        <input 
-          id="date-input"
-          type="date" 
-          [(ngModel)]="selectedDate" 
-          (change)="onDateChange()"
-          [max]="getRateDate()"
-        />
+        <mat-form-field appearance="outline">
+          <mat-label>Date</mat-label>
+          <input 
+            matInput 
+            [matDatepicker]="picker"
+            [(ngModel)]="selectedDate" 
+            (dateChange)="onDateChange()"
+            [max]="maxDate"
+            placeholder="Sélectionner une date"
+          />
+          <mat-datepicker-toggle matIconSuffix [for]="picker"></mat-datepicker-toggle>
+          <mat-datepicker #picker></mat-datepicker>
+        </mat-form-field>
       </div>
     </section>
 
@@ -74,17 +82,24 @@
     <div *ngIf="!loading && exchangeRates.length > 0" class="content-grid">
       <!-- Left Column: Table and CSV -->
       <section class="table-section">
-        <h2>Taux ({{ getRateDate() }})</h2>
-        
-        <button class="export-button" (click)="exportCSV()" [disabled]="exchangeRates.length === 0">
-          ⇩ CSV
-        </button>
+        <div class="section-header">
+          <div class="section-title">Taux ({{ formatDateForDisplay(selectedDate) }})</div>
+          <button 
+            class="icon-button-csv" 
+            (click)="exportCSV()" 
+            [disabled]="exchangeRates.length === 0"
+            title="Télécharger les taux en CSV"
+            [matTooltip]="'Télécharger les taux en CSV'"
+          >
+            <mat-icon>download</mat-icon>
+          </button>
+        </div>
 
         <table>
           <thead>
             <tr>
-              <th>Devise</th>
-              <th>Taux EUR</th>
+              <th class="table-header">Devise</th>
+              <th class="table-header">Taux EUR</th>
             </tr>
           </thead>
           <tbody>
@@ -93,49 +108,61 @@
                 <img [src]="getFlagUrl(rate.flag)" [alt]="rate.currency">
                 <span>{{ rate.currency }}</span>
               </td>
-              <td class="rate-cell">{{ rate.rate.toFixed(4) }}</td>
+              <td class="rate-cell">
+                {{ rate.rate !== null && rate.rate !== undefined ? rate.rate.toFixed(4) : '-' }}
+              </td>
             </tr>
           </tbody>
         </table>
 
-        <div class="csv-output">{{ getCSVOutput() }}</div>
+        <!-- API Response Example -->
+        <div class="api-response-example">
+          <div class="api-request">
+            <code class="request-url">{{ getApiRequestUrl() }}</code>
+          </div>
+          <div class="api-response">
+            <pre><code>{{ getApiResponseExample() }}</code></pre>
+          </div>
+        </div>
       </section>
 
       <!-- Right Column: Chart -->
       <section class="chart-section">
-        <h2>Historique</h2>
-        
-        <div class="period-selector">
-          <label>
-            <input 
-              type="radio" 
-              name="period" 
-              value="Mois" 
-              [(ngModel)]="selectedPeriod"
-              (change)="onPeriodChange()"
-            />
-            <span>Mois</span>
-          </label>
-          <label>
-            <input 
-              type="radio" 
-              name="period" 
-              value="Trimestre" 
-              [(ngModel)]="selectedPeriod"
-              (change)="onPeriodChange()"
-            />
-            <span>Trimestre</span>
-          </label>
-          <label>
-            <input 
-              type="radio" 
-              name="period" 
-              value="Année" 
-              [(ngModel)]="selectedPeriod"
-              (change)="onPeriodChange()"
-            />
-            <span>Année</span>
-          </label>
+        <div class="chart-header">
+          <div class="section-title">Historique</div>
+          
+          <div class="period-selector">
+            <label>
+              <input 
+                type="radio" 
+                name="period" 
+                value="Mois" 
+                [(ngModel)]="selectedPeriod"
+                (change)="onPeriodChange()"
+              />
+              <span>Mois</span>
+            </label>
+            <label>
+              <input 
+                type="radio" 
+                name="period" 
+                value="Trimestre" 
+                [(ngModel)]="selectedPeriod"
+                (change)="onPeriodChange()"
+              />
+              <span>Trimestre</span>
+            </label>
+            <label>
+              <input 
+                type="radio" 
+                name="period" 
+                value="Année" 
+                [(ngModel)]="selectedPeriod"
+                (change)="onPeriodChange()"
+              />
+              <span>Année</span>
+            </label>
+          </div>
         </div>
 
         <div class="chart-container">
@@ -146,95 +173,188 @@
   </div>
 
   <!-- Docs View -->
-  <div *ngIf="currentView === 'docs'" class="docs-page">
-    <section>
-      <h2>Documentation API BCE Exchange Rates</h2>
+  <div *ngIf="currentView === 'docs'" class="docs-container">
+    <section class="docs-section">
+      <h2>Documentation API</h2>
+      <p class="intro-text">Consultez les taux de change EUR à travers nos deux endpoints principaux.</p>
       
-      <h3>Endpoints Disponibles</h3>
-      
-      <h3>1. Health Check</h3>
-      <pre><code>GET /api/health</code></pre>
-      <p>Vérifie l'état du service.</p>
-      <p><strong>Réponse:</strong></p>
-      <pre><code>{{ '{' }}
-  "status": "ok",
-  "timestamp": "2025-12-07T00:21:23.508Z"
-{{ '}' }}</code></pre>
-
-      <h3>2. Taux de Change Actuels</h3>
-      <pre><code>GET /api/bce-exchange?currencies=CHF,USD,GBP&date=2025-12-07</code></pre>
-      <p><strong>Query Parameters:</strong></p>
-      <ul>
-        <li><code>currencies</code> (requis): Codes de devises séparés par virgule</li>
-        <li><code>date</code> (optionnel): Date au format YYYY-MM-DD. Si omis, retourne la dernière valeur disponible</li>
-      </ul>
-      <p><strong>Réponse:</strong></p>
-      <pre><code>{{ '{' }}
+      <!-- Endpoint 1: Current Rates -->
+      <div class="endpoint-card">
+        <div class="endpoint-header">
+          <span class="method get">GET</span>
+          <span class="endpoint-path">/api/bce-exchange</span>
+        </div>
+        
+        <h3>Obtenir les taux actuels</h3>
+        <p>Récupère les taux de change EUR pour les devises spécifiées à la date du jour (ou une date antérieure).</p>
+        
+        <div class="params-section">
+          <h4>Paramètres de requête</h4>
+          <table class="params-table">
+            <tr>
+              <td class="param-name">currencies</td>
+              <td class="param-type">string</td>
+              <td class="param-desc">Codes de devises séparés par des virgules (ex: <code>USD,GBP,CHF</code>)</td>
+            </tr>
+            <tr>
+              <td class="param-name">date</td>
+              <td class="param-type">string (optionnel)</td>
+              <td class="param-desc">Format YYYY-MM-DD. Si non spécifié, utilise la date du jour</td>
+            </tr>
+          </table>
+        </div>
+        
+        <div class="examples-section">
+          <h4>Exemples</h4>
+          <div class="example">
+            <p><strong>Exemple 1:</strong> Taux actuels USD, GBP, CHF</p>
+            <div class="code-block">
+              <code>GET /api/bce-exchange?currencies=USD,GBP,CHF</code>
+            </div>
+            <p class="response-label">Réponse:</p>
+            <pre><code>{{`{
   "status": "success",
-  "date": "2025-12-07",
+  "date": "2025-12-05",
   "base": "EUR",
   "rates": [
-    {{ '{' }}
-      "currency": "CHF",
-      "rate": 0.9365,
-      "flag": "ch"
-    {{ '}' }},
-    {{ '{' }}
-      "currency": "USD",
-      "rate": 1.0512,
-      "flag": "us"
-    {{ '}' }}
-  ],
-  "source": "European Central Bank (ECB)",
-  "referenceBase": "EUR",
-  "queriedAt": "2025-12-07T00:21:23.508Z"
-{{ '}' }}</code></pre>
-
-      <h3>3. Historique des Taux</h3>
-      <pre><code>GET /api/bce-exchange/history?currencies=CHF,USD&start=2024-12-07&end=2025-12-07</code></pre>
-      <p><strong>Query Parameters:</strong></p>
-      <ul>
-        <li><code>currencies</code> (requis): Codes de devises séparés par virgule</li>
-        <li><code>start</code> (requis): Date de début au format YYYY-MM-DD</li>
-        <li><code>end</code> (requis): Date de fin au format YYYY-MM-DD</li>
-      </ul>
-      <p><strong>Réponse:</strong></p>
-      <pre><code>{{ '{' }}
-  "status": "success",
-  "start": "2024-12-07",
-  "end": "2025-12-07",
-  "referenceBase": "EUR",
-  "source": "European Central Bank (ECB)",
-  "queriedAt": "2025-12-07T00:21:23.508Z",
-  "data": [
-    {{ '{' }}
-      "currency": "CHF",
-      "date": "2024-12-07",
-      "rate": 0.9365
-    {{ '}' }},
-    {{ '{' }}
-      "currency": "CHF",
-      "date": "2024-12-08",
-      "rate": 0.9370
-    {{ '}' }}
+    { "currency": "USD", "rate": 1.0450, "flag": "us" },
+    { "currency": "GBP", "rate": 0.8350, "flag": "gb" },
+    { "currency": "CHF", "rate": 0.9280, "flag": "ch" }
   ]
-{{ '}' }}</code></pre>
-
-      <h3>Devises Disponibles</h3>
-      <p>USD, GBP, CHF, JPY, CAD, AUD, NZD, SEK, NOK, DKK, PLN, CZK, HUF, RON, BGN, HRK, RUB, TRY, BRL, CNY, HKD, IDR, ILS, INR, KRW, MXN, MYR, PHP, SGD, THB, ZAR</p>
-
-      <h3>Gestion des Erreurs</h3>
-      <p>En cas d'erreur, l'API retourne:</p>
-      <pre><code>{{ '{' }}
-  "status": "error",
-  "message": "Description de l'erreur",
-  "ecbRequestUrl": "URL de la requête ECB (si applicable)"
-{{ '}' }}</code></pre>
-
-      <h3>Source des Données</h3>
-      <p>Les données proviennent de l'API officielle de la Banque Centrale Européenne (ECB):</p>
-      <p><code>https://data-api.ecb.europa.eu</code></p>
-      <p><strong>Note:</strong> Les données peuvent avoir 1-3 jours de retard selon la publication de la BCE.</p>
+}`}}</code></pre>
+          </div>
+          
+          <div class="example">
+            <p><strong>Exemple 2:</strong> Taux à une date spécifique</p>
+            <div class="code-block">
+              <code>GET /api/bce-exchange?currencies=JPY&date=2025-12-01</code>
+            </div>
+            <p class="response-label">Réponse:</p>
+            <pre><code>{{`{
+  "status": "success",
+  "date": "2025-12-01",
+  "base": "EUR",
+  "rates": [
+    { "currency": "JPY", "rate": 160.5200, "flag": "jp" }
+  ]
+}`}}</code></pre>
+          </div>
+        </div>
+        
+        <div class="response-section">
+          <h4>Structure de réponse</h4>
+          <table class="response-table">
+            <tr>
+              <td class="response-key">status</td>
+              <td class="response-type">string</td>
+              <td class="response-desc">"success" ou "error"</td>
+            </tr>
+            <tr>
+              <td class="response-key">date</td>
+              <td class="response-type">string</td>
+              <td class="response-desc">Date des taux au format YYYY-MM-DD</td>
+            </tr>
+            <tr>
+              <td class="response-key">base</td>
+              <td class="response-type">string</td>
+              <td class="response-desc">Devise de base (EUR)</td>
+            </tr>
+            <tr>
+              <td class="response-key">rates</td>
+              <td class="response-type">array</td>
+              <td class="response-desc">Tableau des taux avec currency, rate, flag</td>
+            </tr>
+          </table>
+        </div>
+      </div>
+      
+      <!-- Endpoint 2: Historical Rates -->
+      <div class="endpoint-card">
+        <div class="endpoint-header">
+          <span class="method get">GET</span>
+          <span class="endpoint-path">/api/bce-exchange/history</span>
+        </div>
+        
+        <h3>Obtenir l'historique des taux</h3>
+        <p>Récupère l'historique des taux de change EUR sur une période donnée.</p>
+        
+        <div class="params-section">
+          <h4>Paramètres de requête</h4>
+          <table class="params-table">
+            <tr>
+              <td class="param-name">currencies</td>
+              <td class="param-type">string</td>
+              <td class="param-desc">Codes de devises séparés par des virgules (ex: <code>USD,GBP</code>)</td>
+            </tr>
+            <tr>
+              <td class="param-name">start</td>
+              <td class="param-type">string</td>
+              <td class="param-desc">Date de début au format YYYY-MM-DD</td>
+            </tr>
+            <tr>
+              <td class="param-name">end</td>
+              <td class="param-type">string</td>
+              <td class="param-desc">Date de fin au format YYYY-MM-DD</td>
+            </tr>
+          </table>
+        </div>
+        
+        <div class="examples-section">
+          <h4>Exemples</h4>
+          <div class="example">
+            <p><strong>Exemple:</strong> Historique USD du dernier mois</p>
+            <div class="code-block">
+              <code>GET /api/bce-exchange/history?currencies=USD&start=2025-11-05&end=2025-12-05</code>
+            </div>
+            <p class="response-label">Réponse:</p>
+            <pre><code>{{`{
+  "status": "success",
+  "start": "2025-11-05",
+  "end": "2025-12-05",
+  "data": [
+    { "currency": "USD", "date": "2025-11-05", "rate": 1.0420 },
+    { "currency": "USD", "date": "2025-11-06", "rate": 1.0435 },
+    { "currency": "USD", "date": "2025-11-07", "rate": 1.0450 },
+    ...
+  ]
+}`}}</code></pre>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Health Check Endpoint -->
+      <div class="endpoint-card">
+        <div class="endpoint-header">
+          <span class="method get">GET</span>
+          <span class="endpoint-path">/api/health</span>
+        </div>
+        
+        <h3>Vérifier l'état du service</h3>
+        <p>Endpoint simple pour vérifier que l'API est opérationnelle.</p>
+        
+        <div class="examples-section">
+          <h4>Exemple</h4>
+          <div class="example">
+            <div class="code-block">
+              <code>GET /api/health</code>
+            </div>
+            <p class="response-label">Réponse:</p>
+            <pre><code>{{`{
+  "status": "ok"
+}`}}</code></pre>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Full Documentation Link -->
+      <div class="full-docs-section">
+        <h3>Documentation Complète</h3>
+        <p>Pour la documentation technique complète avec interactivité, consultez:</p>
+        <button class="api-docs-button" (click)="openApiDocs()">
+          <mat-icon>open_in_new</mat-icon>
+          Ouvrir la documentation API Scalar
+        </button>
+      </div>
     </section>
   </div>
 </main>
