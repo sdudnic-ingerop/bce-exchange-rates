@@ -8,7 +8,8 @@ class RedisService {
 
   constructor(logger: any) {
     this.logger = logger;
-    this.enabled = !!process.env.REDIS_URL;
+    // Only enable Redis if REDIS_URL is explicitly set in environment
+    this.enabled = !!process.env.REDIS_URL && process.env.REDIS_URL !== 'redis://localhost:6379';
 
     if (!this.enabled) {
       this.logger.info('⚠️  Redis disabled (REDIS_URL not set) - running without cache');
