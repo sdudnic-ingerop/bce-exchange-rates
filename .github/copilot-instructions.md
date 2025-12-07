@@ -35,9 +35,33 @@ IMPORTANT POUR LES AGENTS:
 - Lorsque vous fournissez des commandes, fournissez exclusivement des commandes `docker-compose` ou `docker` et précisez si la commande modifie l'image (requiert `--build`) ou démarre un conteneur en mode développement (volumes montés).
 
 ### Git et Commits
+
+#### Workflow Git
+- **Branche principale**: `develop` (jamais toucher `main` directement)
+- **Branches de travail**: Créer des branches depuis `develop`
+  - Format: `feature/nom-feature`, `bugfix/nom-bug`, `refactor/nom`, `docs/nom`
+- **Commits**: Toujours commiter sur `develop` ou une branche de feature
+- **Push**: `git push origin develop` (jamais `origin main`)
+- **Main**: Protégée, mise à jour uniquement via Pull Request depuis `develop`
+
+#### Format des Commits
 - Format: `[type]: description` (ex: `[feat]: add login endpoint`)
-- Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
-- Branches: `feature/`, `bugfix/`, `refactor/`, `docs/`
+- Types: 
+  - `feat`: Nouvelle fonctionnalité
+  - `fix`: Correction de bug
+  - `docs`: Documentation
+  - `style`: Formatage, style (pas de changement de code)
+  - `refactor`: Refactoring de code
+  - `test`: Ajout/modification de tests
+  - `chore`: Tâches de maintenance (build, config, etc.)
+  - `merge`: Merge de branches
+
+#### Règles Importantes
+- ❌ **JAMAIS** commiter ou pusher directement sur `main`
+- ❌ **JAMAIS** modifier `origin/main` localement
+- ✅ **TOUJOURS** travailler sur `develop` ou une feature branch
+- ✅ **TOUJOURS** pusher sur `origin/develop`
+- ✅ Utiliser des Pull Requests pour merger `develop` → `main`
 
 ### Bonnes Pratiques
 - Noms significatifs pour variables et fonctions
