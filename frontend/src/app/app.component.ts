@@ -575,8 +575,9 @@ export class AppComponent implements OnInit, AfterViewInit {
   getApiRequestUrl(): string {
     const currencies = this.selectedCurrencies.join(',');
     const date = this.formatDateForApi(this.selectedDate);
-    const baseUrl = this.apiBase ? `${this.apiBase}/api/bce-exchange` : '/api/bce-exchange';
-    return `${baseUrl}?currencies=${currencies}&date=${date}`;
+    // Use full URL for display (current origin + path)
+    const origin = window.location.origin;
+    return `${origin}/api/bce-exchange?currencies=${currencies}&date=${date}`;
   }
   
   getApiResponseExample(): string {
