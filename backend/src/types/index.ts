@@ -7,7 +7,7 @@ export interface ExchangeRate {
 
 export interface ExchangeResponse {
   status: string;
-  date: string;
+  ratesUpdateDate: string;
   base: string;
   rates: ExchangeRate[];
   source?: string;
