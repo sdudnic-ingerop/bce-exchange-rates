@@ -20,16 +20,22 @@ const fastify = Fastify({
 
 // CORS configuration
 await fastify.register(cors, {
-  origin: ['http://localhost:4200', 'http://localhost:8501'],
+  origin: true,
   methods: ['GET', 'POST', 'OPTIONS']
 });
 
-// Static files
-await fastify.register(fastifyStatic, {
-  root: path.join(__dirname, '../public'),
-  prefix: '/',
-  index: ['index.html']
-});
+// Static files (only if public directory exists)
+const publicPath = path.join(__dirname, '../public');
+try {
+  await fastify.register(fastifyStatic, {
+    root: publicPath,
+    prefix: '/',
+    index: ['index.html']
+  });
+  console.log(`📁 Serving static files from: ${publicPath}`);
+} catch (err) {
+  console.log('ℹ️  No static files directory - API only mode');
+}
 
 // Initialize services
 const redisService = new RedisService(fastify.log);
