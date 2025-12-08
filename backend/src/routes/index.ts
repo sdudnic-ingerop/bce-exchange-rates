@@ -12,15 +12,15 @@ export function setupRoutes(
   rateLimiter: RateLimiterService,
   ecbService: ECBService
 ) {
-  // Root endpoint
-  fastify.get('/', async () => ({
+  // API info endpoint
+  fastify.get('/api', async () => ({
     service: 'BCE Exchange Rates API',
     version: '1.0.0',
     endpoints: {
       health: 'GET /api/health',
       rates: 'GET /api/bce-exchange?currencies=USD,CHF&date=2025-12-06',
       history: 'GET /api/bce-exchange/history?currencies=USD,CHF&start=2025-11-01&end=2025-12-06',
-      docs: 'GET /api/docs - Scalar API Documentation'
+      docs: 'GET /api/docs'
     }
   }));
 
