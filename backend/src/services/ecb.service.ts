@@ -188,10 +188,10 @@ class ECBService {
     // The fetchRates method already handles lastNObservations=1 logic when no date is provided
     const result = await this.fetchRates([currency]);
     
-    if (result.date) {
+    if (result.ratesUpdateDate) {
       // Cache for 1 hour
-      await this.redisService.setCache(cacheKey, result.date);
-      return result.date;
+      await this.redisService.setCache(cacheKey, result.ratesUpdateDate);
+      return result.ratesUpdateDate;
     }
     
     throw new Error('Could not determine latest date');

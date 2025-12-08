@@ -78,7 +78,7 @@ class CSVService {
     
     return {
       status: 'success',
-      date: targetDate,
+      ratesUpdateDate: targetDate,
       base: 'EUR',
       rates: rates.sort((a, b) => a.currency.localeCompare(b.currency)),
       source: 'Local CSV fallback (ECB historical data)',
