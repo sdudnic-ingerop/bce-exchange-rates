@@ -117,7 +117,7 @@ http://localhost:8000/api/bce-exchange?currencies=USD,CHF&date=2025-12-06
                   type: 'object',
                   properties: {
                     status: { type: 'string', example: 'success' },
-                    date: { type: 'string', format: 'date' },
+                    ratesUpdateDate: { type: 'string', format: 'date' },
                     base: { type: 'string', example: 'EUR' },
                     rates: {
                       type: 'array',
@@ -148,6 +148,41 @@ http://localhost:8000/api/bce-exchange?currencies=USD,CHF&date=2025-12-06
                     message: { type: 'string', example: 'Aucune donnée disponible pour cette date' },
                     requestedDate: { type: 'string', example: '2025-12-08' },
                     ecbRequestUrl: { type: 'string', example: 'https://data-api.ecb.europa.eu/service/data/EXR/...' }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    '/api/bce-exchange/latest-date': {
+      get: {
+        summary: 'Get latest available date',
+        description: 'Récupère la date la plus récente disponible pour une devise donnée (par défaut USD). Utile pour connaître la dernière date de publication de la BCE.',
+        tags: ['Exchange Rates'],
+        parameters: [
+          {
+            name: 'currency',
+            in: 'query',
+            required: false,
+            description: 'Devise cible (défaut: USD)',
+            schema: { type: 'string' },
+            example: 'CHF'
+          }
+        ],
+        responses: {
+          '200': {
+            description: 'Dernière date disponible',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    status: { type: 'string', example: 'success' },
+                    currency: { type: 'string', example: 'CHF' },
+                    ratesUpdateDate: { type: 'string', format: 'date', example: '2025-12-05' },
+                    source: { type: 'string', example: 'European Central Bank (ECB)' }
                   }
                 }
               }

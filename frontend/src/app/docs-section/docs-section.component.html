@@ -1,0 +1,294 @@
+<section class="docs-section">
+  <h2>Documentation API</h2>
+  <p class="intro-text">Consultez les taux de change EUR à travers nos deux endpoints principaux. Vous pouvez aussi interroger directement l'API officielle de la BCE (SDW) si vous souhaitez récupérer la réponse brute — notez que la réponse BCE contient beaucoup de métadonnées et n'est pas simplifiée par défaut.</p>
+  
+  <!-- Endpoint 1: Current Rates -->
+  <div class="endpoint-card">
+    <div class="endpoint-header">
+      <span class="method get">GET</span>
+      <span class="endpoint-path">/api/bce-exchange</span>
+    </div>
+    
+    <h3>Obtenir les taux actuels</h3>
+    <p>Récupère les taux de change EUR pour les devises spécifiées à la date du jour (ou une date antérieure).</p>
+    
+    <div class="params-section">
+      <h4>Paramètres de requête</h4>
+      <table class="params-table">
+        <tr>
+          <td class="param-name">currencies</td>
+          <td class="param-type">string</td>
+          <td class="param-desc">Codes de devises séparés par des virgules (ex: <code>USD,GBP,CHF</code>)</td>
+        </tr>
+        <tr>
+          <td class="param-name">date</td>
+          <td class="param-type">string (optionnel)</td>
+          <td class="param-desc">Format YYYY-MM-DD. Si non spécifié, utilise la date du jour</td>
+        </tr>
+      </table>
+    </div>
+    
+    <div class="examples-section">
+      <h4>Exemples</h4>
+      <div class="example">
+        <p><strong>Exemple 1:</strong> Taux actuels USD, GBP, CHF</p>
+        <div class="code-block">
+          <code>GET /api/bce-exchange?currencies=USD,GBP,CHF</code>
+        </div>
+        <p class="response-label">Réponse:</p>
+        <pre><code>{{`{
+  "status": "success",
+  "ratesUpdateDate": "2025-12-05",
+  "base": "EUR",
+  "rates": [
+    { "currency": "USD", "rate": 1.0450, "flag": "us" },
+    { "currency": "GBP", "rate": 0.8350, "flag": "gb" },
+    { "currency": "CHF", "rate": 0.9280, "flag": "ch" }
+  ]
+}`}}</code></pre>
+      </div>
+      
+      <div class="example">
+        <p><strong>Exemple 2:</strong> Taux à une date spécifique</p>
+        <div class="code-block">
+          <code>GET /api/bce-exchange?currencies=JPY&date=2025-12-01</code>
+        </div>
+        <p class="response-label">Réponse:</p>
+        <pre><code>{{`{
+  "status": "success",
+  "ratesUpdateDate": "2025-12-01",
+  "base": "EUR",
+  "rates": [
+    { "currency": "JPY", "rate": 160.5200, "flag": "jp" }
+  ]
+}`}}</code></pre>
+      </div>
+    </div>
+    
+    <div class="response-section">
+      <h4>Structure de réponse</h4>
+      <table class="response-table">
+        <tr>
+          <td class="response-key">status</td>
+          <td class="response-type">string</td>
+          <td class="response-desc">"success" ou "error"</td>
+        </tr>
+        <tr>
+          <td class="response-key">ratesUpdateDate</td>
+          <td class="response-type">string</td>
+          <td class="response-desc">Date des taux au format YYYY-MM-DD</td>
+        </tr>
+        <tr>
+          <td class="response-key">base</td>
+          <td class="response-type">string</td>
+          <td class="response-desc">Devise de base (EUR)</td>
+        </tr>
+        <tr>
+          <td class="response-key">rates</td>
+          <td class="response-type">array</td>
+          <td class="response-desc">Tableau des taux avec currency, rate, flag</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- Endpoint: Latest Date -->
+  <div class="endpoint-card">
+    <div class="endpoint-header">
+      <span class="method get">GET</span>
+      <span class="endpoint-path">/api/bce-exchange/latest-date</span>
+    </div>
+    
+    <h3>Obtenir la dernière date disponible</h3>
+    <p>Récupère la date la plus récente de publication des taux pour une devise donnée.</p>
+    
+    <div class="params-section">
+      <h4>Paramètres de requête</h4>
+      <table class="params-table">
+        <tr>
+          <td class="param-name">currency</td>
+          <td class="param-type">string (optionnel)</td>
+          <td class="param-desc">Code de devise (ex: <code>CHF</code>). Défaut: <code>USD</code></td>
+        </tr>
+      </table>
+    </div>
+    
+    <div class="examples-section">
+      <h4>Exemple</h4>
+      <div class="example">
+        <div class="code-block">
+          <code>GET /api/bce-exchange/latest-date?currency=CHF</code>
+        </div>
+        <p class="response-label">Réponse:</p>
+        <pre><code>{{`{
+  "status": "success",
+  "currency": "CHF",
+  "ratesUpdateDate": "2025-12-05",
+  "source": "European Central Bank (ECB)"
+}`}}</code></pre>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Endpoint 2: Historical Rates -->
+  <div class="endpoint-card">
+    <div class="endpoint-header">
+      <span class="method get">GET</span>
+      <span class="endpoint-path">/api/bce-exchange/history</span>
+    </div>
+    
+    <h3>Obtenir l'historique des taux</h3>
+    <p>Récupère l'historique des taux de change EUR sur une période donnée.</p>
+    
+    <div class="params-section">
+      <h4>Paramètres de requête</h4>
+      <table class="params-table">
+        <tr>
+          <td class="param-name">currencies</td>
+          <td class="param-type">string</td>
+          <td class="param-desc">Codes de devises séparés par des virgules (ex: <code>USD,GBP</code>)</td>
+        </tr>
+        <tr>
+          <td class="param-name">start</td>
+          <td class="param-type">string</td>
+          <td class="param-desc">Date de début au format YYYY-MM-DD</td>
+        </tr>
+        <tr>
+          <td class="param-name">end</td>
+          <td class="param-type">string</td>
+          <td class="param-desc">Date de fin au format YYYY-MM-DD</td>
+        </tr>
+      </table>
+    </div>
+    
+    <div class="examples-section">
+      <h4>Exemples</h4>
+      <div class="example">
+        <p><strong>Exemple:</strong> Historique USD du dernier mois</p>
+        <div class="code-block">
+          <code>GET /api/bce-exchange/history?currencies=USD&start=2025-11-05&end=2025-12-05</code>
+        </div>
+        <p class="response-label">Réponse:</p>
+        <pre><code>{{`{
+  "status": "success",
+  "start": "2025-11-05",
+  "end": "2025-12-05",
+  "data": [
+    { "currency": "USD", "date": "2025-11-05", "rate": 1.0420 },
+    { "currency": "USD", "date": "2025-11-06", "rate": 1.0435 },
+    { "currency": "USD", "date": "2025-11-07", "rate": 1.0450 },
+    ...
+  ]
+}`}}</code></pre>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Health Check Endpoint -->
+  <div class="endpoint-card">
+    <div class="endpoint-header">
+      <span class="method get">GET</span>
+      <span class="endpoint-path">/api/health</span>
+    </div>
+    
+    <h3>Vérifier l'état du service</h3>
+    <p>Endpoint simple pour vérifier que l'API est opérationnelle.</p>
+    
+    <div class="examples-section">
+      <h4>Exemple</h4>
+      <div class="example">
+        <div class="code-block">
+          <code>GET /api/health</code>
+        </div>
+        <p class="response-label">Réponse:</p>
+        <pre><code>{{`{
+  "status": "ok"
+}`}}</code></pre>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Direct BCE API Section -->
+  <div class="endpoint-card direct-bce-card">
+    <div class="endpoint-header">
+      <span class="method external">SDW</span>
+      <span class="endpoint-path">Appel direct à l'API BCE</span>
+    </div>
+    
+    <h3>Interroger directement l'API officielle (SDW)</h3>
+    <p>Si vous souhaitez la réponse brute de la BCE sans simplification ni cache.</p>
+    
+    <div class="examples-section">
+      <h4>Exemple: Taux CHF</h4>
+      <div class="example">
+        <p><strong>Requête:</strong> Taux CHF pour 2025-12-06</p>
+        <div class="code-block">
+          <code>curl "https://data-api.ecb.europa.eu/service/data/EXR/D.CHF.EUR.SP00.A?startPeriod=2025-12-06&endPeriod=2025-12-06&format=jsondata"</code>
+        </div>
+        
+        <p class="response-label">Réponse brute BCE (tronquée):</p>
+        <pre><code>{{`{
+  "data": {
+    "structure": {
+      "dimensions": {
+        "observation": [
+          { "id": "TIME_PERIOD", "name": "Time Period" },
+          { "id": "OBS_VALUE", "name": "Observation Value" }
+        ]
+      }
+    },
+    "dataSets": [
+      {
+        "series": {
+          "0:0:0:0": {
+            "observations": {
+              "0": ["0.9395"]
+            }
+          }
+        }
+      }
+    ]
+  },
+  "meta": {
+    "updated": "2025-12-06T14:15:00Z"
+  }
+}`}}</code></pre>
+      </div>
+    </div>
+    
+    <div class="params-section">
+      <h4>⚠️ Points importants:</h4>
+      <ul>
+        <li><strong>Structure verbeuse:</strong> vous devez parser `structure.dimensions` + clés `series` pour extraire la valeur</li>
+        <li><strong>Pas de cache:</strong> risque de blocage si trop de requêtes rapides</li>
+        <li><strong>Pas de simplification:</strong> pas de flags pays, pas de messages d'erreur en français</li>
+        <li><strong>DNS local:</strong> si vous recevez ERR_NAME_NOT_RESOLVED, utilisez notre proxy (voir ci-dessous)</li>
+      </ul>
+    </div>
+    
+    <div class="mapping-section">
+      <h4>Comparaison: Réponse simplifiée (notre API proxy)</h4>
+      <p>Le même appel via notre `/api/bce-exchange?currencies=CHF` retourne:</p>
+      <pre><code>{{`{
+      "status": "success",
+      "ratesUpdateDate": "2025-12-06",
+      "base": "EUR",
+      "rates": [
+        { "currency": "CHF", "rate": 0.9395, "flag": "ch" }
+      ],
+      "source": "European Central Bank (ECB)",
+      "cached": false
+    }`}}</code></pre>
+    </div>
+  </div>
+  
+  <!-- Full Documentation Link -->
+  <div class="full-docs-section">
+    <h3>Documentation Complète</h3>
+    <p>Pour la documentation technique complète avec interactivité, consultez:</p>
+    <button class="api-docs-button" (click)="openApiDocs()">
+      <mat-icon>open_in_new</mat-icon>
+      Ouvrir la documentation API Scalar
+    </button>
+  </div>
+</section>

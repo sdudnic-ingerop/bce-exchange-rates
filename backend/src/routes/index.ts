@@ -132,6 +132,25 @@ export function setupRoutes(
     }
   });
 
+  // Latest date endpoint
+  fastify.get<{ Querystring: { currency?: string } }>('/api/bce-exchange/latest-date', async (request, reply) => {
+    const { currency } = request.query;
+    const targetCurrency = currency ? currency.trim().toUpperCase() : 'USD'; // Default to USD as reference
+
+    try {
+      const date = await ecbService.getLatestDate(targetCurrency);
+      return {
+        status: 'success',
+        currency: targetCurrency,
+        date: date,
+        source: 'European Central Bank (ECB)'
+      };
+    } catch (error: any) {
+      fastify.log.error({ err: error }, 'Error in /api/bce-exchange/latest-date');
+      return { status: 'error', message: error.message || 'Could not retrieve latest date' };
+    }
+  });
+
   // History endpoint
   fastify.get<{ Querystring: HistoryQuerystring }>('/api/bce-exchange/history', async (request, reply) => {
     const { currencies, start, end } = request.query;

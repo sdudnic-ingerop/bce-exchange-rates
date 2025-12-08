@@ -13,6 +13,7 @@ import { MatNativeDateModule, DateAdapter, MAT_DATE_FORMATS } from '@angular/mat
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { Chart, ChartConfiguration, registerables } from 'chart.js';
 import { FrenchDateAdapter, FRENCH_DATE_FORMATS } from './date-adapter';
+import { DocsSectionComponent } from './docs-section/docs-section.component';
 
 Chart.register(...registerables);
 
@@ -20,6 +21,7 @@ interface ExchangeRate {
   currency: string;
   rate: number;
   flag: string;
+  date?: string;
 }
 
 interface HistoryPoint {
@@ -30,7 +32,9 @@ interface HistoryPoint {
 
 interface ExchangeResponse {
   status: string;
-  date: string;
+  // `ratesUpdateDate` is the canonical field name for the API response date.
+  // No fallback to `date` — server must return `ratesUpdateDate`.
+  ratesUpdateDate: string;
   base: string;
   rates: ExchangeRate[];
   message?: string;
@@ -58,7 +62,8 @@ interface HistoryResponse {
     MatButtonModule,
     MatDatepickerModule,
     MatNativeDateModule,
-    MatTooltipModule
+    MatTooltipModule,
+    DocsSectionComponent
   ],
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.scss'],
@@ -120,7 +125,7 @@ export class AppComponent implements OnInit, AfterViewInit {
   
   // State
   selectedCurrencies: string[] = ['CHF', 'MXN'];
-  selectedDate: Date = new Date();
+  selectedDate: Date | null = null;
   maxDate: Date = new Date();
   selectedPeriod: string = 'Année';
   currencyFilter: string = '';
@@ -134,6 +139,7 @@ export class AppComponent implements OnInit, AfterViewInit {
   // UI State
   loading: boolean = false;
   error: string | null = null;
+  apiResponseExample: string = '';
   
   // Chart
   chart: Chart | null = null;
@@ -145,14 +151,12 @@ export class AppComponent implements OnInit, AfterViewInit {
     // Set maxDate to today
     this.maxDate = new Date();
     
-    // Set date to 05/12/2025 (5 décembre 2025)
-    // Create explicitly: December 5, 2025 at midnight UTC
-    this.selectedDate = new Date(2025, 11, 5, 0, 0, 0, 0);
+    // selectedDate starts as null (will fetch latest available)
     
     // Set docs URL
     this.docsUrl = this.buildApiUrl('/docs');
     
-    console.log('Initial date set to:', this.formatDateForDisplay(this.selectedDate), 'ISO:', this.selectedDate.toISOString());
+    console.log('Initial state: no specific date selected, will fetch latest available');
   }
   
   ngAfterViewInit() {
@@ -208,9 +212,7 @@ export class AppComponent implements OnInit, AfterViewInit {
         !this.selectedCurrencies.includes(upperCurrency)) {
       this.selectedCurrencies.push(upperCurrency);
       this.currencyFilter = '';
-      if (this.selectedDate) {
-        this.fetchRatesWithValidation();
-      }
+      this.fetchRatesWithValidation();
     }
   }
   
@@ -218,7 +220,7 @@ export class AppComponent implements OnInit, AfterViewInit {
     const index = this.selectedCurrencies.indexOf(currency);
     if (index >= 0) {
       this.selectedCurrencies.splice(index, 1);
-      if (this.selectedCurrencies.length > 0 && this.selectedDate) {
+      if (this.selectedCurrencies.length > 0) {
         this.fetchRatesWithValidation();
       } else {
         this.error = 'Veuillez sélectionner au moins une devise';
@@ -242,9 +244,7 @@ export class AppComponent implements OnInit, AfterViewInit {
     if (this.availableCurrencies.includes(code) && !this.selectedCurrencies.includes(code)) {
       this.selectedCurrencies = [...this.selectedCurrencies, code];
       this.currencyFilter = '';
-      if (this.selectedDate) {
-        this.fetchRatesWithValidation();
-      }
+      this.fetchRatesWithValidation();
     }
   }
   
@@ -267,12 +267,8 @@ export class AppComponent implements OnInit, AfterViewInit {
     this.error = null;
     
     const currencies = this.selectedCurrencies.join(',');
-    // If user selected a date different from today, use it; otherwise fetch latest
-    const dateStr = this.formatDateForApi(this.selectedDate);
-    const isInitialLoad = dateStr === this.formatDateForApi(new Date()); // Approx check
-    
-    // Build URL - if initial load, don't specify date to get latest observations
-    const dateParam = !isInitialLoad && dateStr ? `&date=${dateStr}` : '';
+    // If a date is selected, use it; otherwise, don't specify a date (will get latest)
+    const dateParam = this.selectedDate ? `&date=${this.formatDateForApi(this.selectedDate)}` : '';
     const url = this.buildApiUrl(`/api/bce-exchange?currencies=${currencies}${dateParam}`);
     
     console.log('Fetching from:', url);
@@ -285,13 +281,22 @@ export class AppComponent implements OnInit, AfterViewInit {
           this.exchangeRates = [];
           this.historyData = [];
         } else {
-          // Update selectedDate to the actual date returned
-          const returnedDate = new Date(data.date);
-          this.selectedDate = returnedDate;
+          // Update selectedDate to the actual date returned if not already set
+          // if (!this.selectedDate) {
+          //   const returnedDate = new Date(data.date);
+          //   this.selectedDate = returnedDate;
+          // }
           this.error = null;
           this.exchangeRates = data.rates;
-          console.log('Exchange rates loaded for date:', data.date, this.exchangeRates);
-          this.fetchHistory();
+          // Attach the response date to each rate
+          // Attach the response date to each rate (server must provide `ratesUpdateDate`)
+          const responseDate = (data as any).ratesUpdateDate;
+          this.exchangeRates.forEach(rate => {
+            rate.date = responseDate;
+          });
+          this.updateApiResponseExample();
+          console.log('Exchange rates loaded for date:', responseDate, this.exchangeRates);
+          this.fetchHistory(responseDate);
         }
         this.loading = false;
       },
@@ -343,9 +348,17 @@ export class AppComponent implements OnInit, AfterViewInit {
     });
   }
   
-  fetchHistory() {
-    const endDate = this.formatDateForApi(this.selectedDate);
-    const startDate = this.calculateStartDate(this.selectedDate);
+  fetchHistory(dateStr?: string) {
+    let targetDate: Date | null = this.selectedDate;
+    
+    if (dateStr) {
+      targetDate = this.parseDate(dateStr);
+    }
+    
+    if (!targetDate) return;
+    
+    const endDate = this.formatDateForApi(targetDate);
+    const startDate = this.calculateStartDate(targetDate);
     
     const currencies = this.selectedCurrencies.join(',');
     const url = this.buildApiUrl(`/api/bce-exchange/history?currencies=${currencies}&start=${startDate}&end=${endDate}`);
@@ -578,13 +591,16 @@ export class AppComponent implements OnInit, AfterViewInit {
     const baseUrl = this.apiBase ? `${this.apiBase}/api/bce-exchange` : '/api/bce-exchange';
     return `${baseUrl}?currencies=${currencies}&date=${date}`;
   }
-  
-  getApiResponseExample(): string {
-    if (this.exchangeRates.length === 0) return '';
+  updateApiResponseExample() {
+    if (this.exchangeRates.length === 0) {
+      this.apiResponseExample = '';
+      return;
+    }
     
     const response = {
       status: 'success',
-      date: this.formatDateForApi(this.selectedDate),
+      // Use `ratesUpdateDate` as the canonical field in examples
+      ratesUpdateDate: this.formatDateForApi(this.selectedDate) || this.exchangeRates[0]?.date || '',
       base: 'EUR',
       rates: this.exchangeRates.map(rate => ({
         currency: rate.currency,
@@ -596,7 +612,7 @@ export class AppComponent implements OnInit, AfterViewInit {
       queriedAt: new Date().toISOString()
     };
     
-    return JSON.stringify(response, null, 2);
+    this.apiResponseExample = JSON.stringify(response, null, 2);
   }
   
   // Navigation
@@ -617,7 +633,7 @@ export class AppComponent implements OnInit, AfterViewInit {
     return this.formatDateForApi(this.selectedDate);
   }
   
-  formatDateForApi(date: Date): string {
+  formatDateForApi(date: Date | null | undefined): string {
     if (!date) return '';
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -625,12 +641,17 @@ export class AppComponent implements OnInit, AfterViewInit {
     return `${year}-${month}-${day}`;
   }
   
-  formatDateForDisplay(date: Date): string {
+  formatDateForDisplay(date: Date | null | undefined): string {
     if (!date) return '';
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
     return `${day}/${month}/${year}`; // French format: dd/mm/yyyy
+  }
+
+  parseDate(dateString: string): Date {
+    if (!dateString) return new Date();
+    return new Date(dateString + 'T00:00:00Z');
   }
   
   getFlagUrl(flag: string): string {

@@ -142,7 +142,7 @@ class ECBService {
       const dateUsed = actualDate || new Date().toISOString().split('T')[0];
       const result = {
         status: 'success',
-        date: dateUsed,
+        ratesUpdateDate: dateUsed,
         base: 'EUR',
         rates: rates.sort((a, b) => a.currency.localeCompare(b.currency)),
         source: 'European Central Bank (ECB)',
@@ -174,6 +174,27 @@ class ECBService {
   async fetchLatestRates(currencies: string[]): Promise<ExchangeResponse> {
     // Fetch the latest available data using lastNObservations
     return this.fetchRates(currencies);
+  }
+
+  async getLatestDate(currency: string): Promise<string> {
+    const cacheKey = `bce:latest-date:${currency}`;
+    const cached = await this.redisService.getFromCache(cacheKey);
+    
+    if (cached) {
+      return cached;
+    }
+
+    // We use fetchRates with a single currency to get the latest data
+    // The fetchRates method already handles lastNObservations=1 logic when no date is provided
+    const result = await this.fetchRates([currency]);
+    
+    if (result.date) {
+      // Cache for 1 hour
+      await this.redisService.setCache(cacheKey, result.date);
+      return result.date;
+    }
+    
+    throw new Error('Could not determine latest date');
   }
 
   async fetchHistory(currencies: string[], start: string, end: string): Promise<HistoryPoint[]> {
