@@ -63,8 +63,9 @@ class ECBService {
     }
 
     try {
-      const currencyFilter = currencies.join('+');
-      const dateParam = date ? `&startPeriod=${date}&endPeriod=${date}` : '&lastNObservations=1';
+      const currencyFilter = currencies.length > 0 ? currencies.join('+') : '';
+      // If no date is provided, fetch last 2 observations to calculate trend
+      const dateParam = date ? `&startPeriod=${date}&endPeriod=${date}` : '&lastNObservations=2';
       const url = `${ECB_API_BASE}D.${currencyFilter}.EUR.SP00.A?format=jsondata${dateParam}`;
 
       this.logger.info(`Fetching from ECB: ${url}`);
@@ -116,17 +117,33 @@ class ECBService {
         const currency = currencyDim[currencyIndex]?.id;
 
         if (currency && observations[key]?.observations) {
-          const obsKeys = Object.keys(observations[key].observations);
+          const obsKeys = Object.keys(observations[key].observations).sort((a, b) => parseInt(a) - parseInt(b));
           if (obsKeys.length > 0) {
             const lastObsIdx = obsKeys[obsKeys.length - 1];
             const lastObs = observations[key].observations[lastObsIdx];
             const rate = lastObs?.[0];
             
             if (rate) {
+              const currentRate = parseFloat(rate);
+              let trend: 'up' | 'down' | 'equal' = 'equal';
+
+              // Calculate trend if we have previous observation
+              if (obsKeys.length >= 2) {
+                const prevObsIdx = obsKeys[obsKeys.length - 2];
+                const prevObs = observations[key].observations[prevObsIdx];
+                const prevRate = prevObs?.[0] ? parseFloat(prevObs[0]) : null;
+                
+                if (prevRate !== null) {
+                  if (currentRate > prevRate) trend = 'up';
+                  else if (currentRate < prevRate) trend = 'down';
+                }
+              }
+
               rates.push({
                 currency,
-                rate: parseFloat(rate),
-                flag: currencyFlags[currency] || 'xx'
+                rate: currentRate,
+                flag: currencyFlags[currency] || 'xx',
+                trend
               });
               
               // Extract actual date from response if using lastNObservations
@@ -147,7 +164,8 @@ class ECBService {
         rates: rates.sort((a, b) => a.currency.localeCompare(b.currency)),
         source: 'European Central Bank (ECB)',
         referenceBase: 'EUR',
-        queriedAt: new Date().toISOString()
+        queriedAt: new Date().toISOString(),
+        ecbRequestUrl: url
       };
       
       await this.redisService.setCache(cacheKey, result);
@@ -176,6 +194,17 @@ class ECBService {
     return this.fetchRates(currencies);
   }
 
+  buildEcbRequestUrl(currencies: string[], date?: string, start?: string, end?: string): string {
+    const currencyFilter = currencies.length > 0 ? currencies.join('+') : '';
+    if (start && end) {
+      return `${ECB_API_BASE}D.${currencyFilter}.EUR.SP00.A?format=jsondata&startPeriod=${start}&endPeriod=${end}`;
+    }
+    if (date) {
+      return `${ECB_API_BASE}D.${currencyFilter}.EUR.SP00.A?format=jsondata&startPeriod=${date}&endPeriod=${date}`;
+    }
+    return `${ECB_API_BASE}D.${currencyFilter}.EUR.SP00.A?format=jsondata&lastNObservations=1`;
+  }
+
   async getLatestDate(currency: string): Promise<string> {
     const cacheKey = `bce:latest-date:${currency}`;
     const cached = await this.redisService.getFromCache(cacheKey);
@@ -197,8 +226,13 @@ class ECBService {
     throw new Error('Could not determine latest date');
   }
 
-  async fetchHistory(currencies: string[], start: string, end: string): Promise<HistoryPoint[]> {
-    const cacheKey = `bce:history:${currencies.sort().join(',')}:${start}:${end}`;
+  async fetchHistory(currencies: string[], start?: string, end?: string): Promise<HistoryPoint[]> {
+    // Default start date to 1999-01-01 (Euro launch) if not provided
+    const startDateStr = start || '1999-01-01';
+    // Default end date to today if not provided
+    const endDateStr = end || new Date().toISOString().split('T')[0];
+
+    const cacheKey = `bce:history:${currencies.sort().join(',')}:${startDateStr}:${endDateStr}`;
     const cached = await this.redisService.getFromCache(cacheKey);
     
     if (cached) {
@@ -217,14 +251,12 @@ class ECBService {
       throw err;
     }
 
-    const currencyFilter = currencies.join('+');
-    const startDate = new Date(start);
-    const endDate = new Date(end);
-    const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-    const numObs = Math.max(daysDiff + 50, 365);
-    const url = `${ECB_API_BASE}D.${currencyFilter}.EUR.SP00.A?format=jsondata&lastNObservations=${numObs}`;
+    const currencyFilter = currencies.length > 0 ? currencies.join('+') : '';
+    
+    // Use startPeriod and endPeriod for precise range fetching
+    const url = `${ECB_API_BASE}D.${currencyFilter}.EUR.SP00.A?format=jsondata&startPeriod=${startDateStr}&endPeriod=${endDateStr}`;
 
-    this.logger.info(`Fetching history from ECB: ${url} (requesting ${numObs} most recent observations)`);
+    this.logger.info(`Fetching history from ECB: ${url}`);
     
     const response = await this.fetchWithRetries(url, {
       headers: {
@@ -265,20 +297,24 @@ class ECBService {
       });
     });
 
-    const filtered = points.filter(p => p.date >= start && p.date <= end);
+    // Filter again just in case, though API should have handled it
+    const filtered = points.filter(p => p.date >= startDateStr && p.date <= endDateStr);
     const sorted = filtered.sort((a, b) => a.date.localeCompare(b.date) || a.currency.localeCompare(b.currency));
     await this.redisService.setCache(cacheKey, sorted);
     return sorted;
   }
 
-  async fetchHistoryWithFallback(currencies: string[], start: string, end: string): Promise<HistoryPoint[]> {
+  async fetchHistoryWithFallback(currencies: string[], start?: string, end?: string): Promise<HistoryPoint[]> {
     try {
       return await this.fetchHistory(currencies, start, end);
     } catch (error) {
       if ((error as any).blocked) throw error;
       
       this.logger.warn('ECB history failed, trying CSV fallback');
-      const fallbackData = this.csvService.buildHistoryFromCSV(currencies, start, end);
+      // Default dates for fallback if needed
+      const s = start || '1999-01-01';
+      const e = end || new Date().toISOString().split('T')[0];
+      const fallbackData = this.csvService.buildHistoryFromCSV(currencies, s, e);
       return fallbackData;
     }
   }

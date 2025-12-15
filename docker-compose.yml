@@ -54,6 +54,7 @@ services:
       - ./frontend/package.json:/app/package.json:ro
     environment:
       - NODE_ENV=development
+      - NODE_OPTIONS=--max-http-header-size=65536
     restart: unless-stopped
 
 networks:

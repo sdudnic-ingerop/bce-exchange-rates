@@ -3,6 +3,7 @@ export interface ExchangeRate {
   currency: string;
   rate: number;
   flag: string;
+  trend?: 'up' | 'down' | 'equal';
 }
 
 export interface ExchangeResponse {
@@ -37,6 +38,6 @@ export interface ExchangeQuerystring {
 
 export interface HistoryQuerystring {
   currencies?: string;
-  start?: string;
-  end?: string;
+  start: string;
+  end: string;
 }

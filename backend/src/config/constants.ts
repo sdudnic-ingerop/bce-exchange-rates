@@ -21,5 +21,11 @@ export const currencyFlags: Record<string, string> = {
   'BGN': 'bg', 'HRK': 'hr', 'RUB': 'ru', 'TRY': 'tr', 'BRL': 'br',
   'CNY': 'cn', 'HKD': 'hk', 'IDR': 'id', 'ILS': 'il', 'INR': 'in',
   'KRW': 'kr', 'MXN': 'mx', 'MYR': 'my', 'PHP': 'ph', 'SGD': 'sg',
-  'THB': 'th', 'ZAR': 'za'
+  'THB': 'th', 'ZAR': 'za', 'ISK': 'is'
 };
+
+export const SUPPORTED_CURRENCIES = [
+  'USD', 'JPY', 'BGN', 'CZK', 'DKK', 'GBP', 'HUF', 'PLN', 'RON', 'SEK', 
+  'CHF', 'ISK', 'NOK', 'TRY', 'AUD', 'BRL', 'CAD', 'CNY', 'HKD', 'IDR', 
+  'ILS', 'INR', 'KRW', 'MXN', 'MYR', 'NZD', 'PHP', 'SGD', 'THB', 'ZAR'
+];

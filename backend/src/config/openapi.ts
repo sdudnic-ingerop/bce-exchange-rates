@@ -83,8 +83,8 @@ http://localhost:8000/api/bce-exchange?currencies=USD,CHF&date=2025-12-06
           {
             name: 'currencies',
             in: 'query',
-            required: true,
-            description: 'Devises séparées par virgule',
+            required: false,
+            description: 'Devises séparées par virgule (optionnel, par défaut toutes les devises)',
             schema: { type: 'string' },
             example: 'USD,CHF,GBP'
           },
@@ -215,15 +215,15 @@ http://localhost:8000/api/bce-exchange/history?currencies=USD,CHF&start=2025-11-
           {
             name: 'currencies',
             in: 'query',
-            required: true,
-            description: 'Devises séparées par virgule',
+            required: false,
+            description: 'Devises séparées par virgule (optionnel, par défaut toutes les devises)',
             schema: { type: 'string' },
             example: 'USD,CHF'
           },
           {
             name: 'start',
             in: 'query',
-            required: true,
+            required: false,
             description: 'Date de début',
             schema: { type: 'string', format: 'date' },
             example: '2025-11-01'
@@ -231,7 +231,7 @@ http://localhost:8000/api/bce-exchange/history?currencies=USD,CHF&start=2025-11-
           {
             name: 'end',
             in: 'query',
-            required: true,
+            required: false,
             description: 'Date de fin',
             schema: { type: 'string', format: 'date' },
             example: '2025-12-06'

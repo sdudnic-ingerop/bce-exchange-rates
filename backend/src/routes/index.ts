@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { ExchangeQuerystring, HistoryQuerystring } from '../types/index.js';
 import { openApiSpec } from '../config/openapi.js';
-import { CACHE_TTL_SECONDS, ECB_MAX_REQ_PER_MIN } from '../config/constants.js';
+import { CACHE_TTL_SECONDS, ECB_MAX_REQ_PER_MIN, SUPPORTED_CURRENCIES, currencyFlags } from '../config/constants.js';
 import RedisService from '../services/redis.service.js';
 import RateLimiterService from '../services/rateLimiter.service.js';
 import ECBService from '../services/ecb.service.js';
@@ -90,25 +90,55 @@ export function setupRoutes(
     };
   });
 
+  // Get available currencies endpoint
+  fastify.get('/api/bce-exchange/currencies', async (request, reply) => {
+    try {
+      // Return the static list of supported currencies as requested
+      const currencies = SUPPORTED_CURRENCIES.map(code => ({
+        code,
+        flag: currencyFlags[code] || 'xx'
+      }));
+      
+      return {
+        status: 'success',
+        currencies: currencies.sort((a, b) => a.code.localeCompare(b.code)),
+        count: currencies.length,
+        source: 'European Central Bank (ECB) Supported List'
+      };
+    } catch (error: any) {
+      fastify.log.error({ err: error }, 'Error fetching available currencies');
+      return {
+        status: 'error',
+        message: error.message || 'Could not retrieve available currencies'
+      };
+    }
+  });
+
   // Exchange rates endpoint
   fastify.get<{ Querystring: ExchangeQuerystring }>('/api/bce-exchange', async (request, reply) => {
     const { currencies, date } = request.query;
 
-    if (!currencies) {
-      reply.code(400);
-      return { status: 'error', message: 'Parameter "currencies" is required' };
-    }
-
-    const currencyList = currencies.split(',').map(c => c.trim().toUpperCase());
+    // If currencies is not provided, we assume all available currencies (empty list)
+    // Handle empty string case specifically
+    const currencyList = (currencies && currencies.trim() !== '') 
+      ? currencies.split(',').map(c => c.trim().toUpperCase()) 
+      : [];
 
     try {
       // If no date provided, fetch latest observations to find the most recent valid date
       let result;
       if (!date) {
-        fastify.log.info(`Fetching latest observations for currencies: ${currencyList.join(',')}`);
+        if (currencyList.length > 0) {
+          fastify.log.info(`Fetching latest observations for currencies: ${currencyList.join(',')}`);
+        } else {
+          fastify.log.info(`Fetching latest observations for ALL currencies`);
+        }
         result = await ecbService.fetchLatestRates(currencyList);
       } else {
         result = await ecbService.fetchRates(currencyList, date);
+      }
+      if (!result.ecbRequestUrl) {
+        result.ecbRequestUrl = ecbService.buildEcbRequestUrl(currencyList);
       }
       return result;
     } catch (error: any) {
@@ -155,24 +185,26 @@ export function setupRoutes(
   fastify.get<{ Querystring: HistoryQuerystring }>('/api/bce-exchange/history', async (request, reply) => {
     const { currencies, start, end } = request.query;
 
-    if (!currencies || !start || !end) {
-      reply.code(400);
-      return { status: 'error', message: 'Parameters "currencies", "start" and "end" are required' };
-    }
-
-    const currencyList = currencies.split(',').map(c => c.trim().toUpperCase());
+    // If currencies is not provided, we assume all available currencies (empty list)
+    // Handle empty string case specifically
+    const currencyList = (currencies && currencies.trim() !== '') 
+      ? currencies.split(',').map(c => c.trim().toUpperCase()) 
+      : [];
 
     try {
       const data = await ecbService.fetchHistoryWithFallback(currencyList, start, end);
-      return {
+      const responsePayload: any = {
         status: 'success',
-        start,
-        end,
+        start: start || '1999-01-01',
+        end: end || new Date().toISOString().split('T')[0],
         referenceBase: 'EUR',
         source: data.length > 0 && data[0].date ? 'European Central Bank (ECB)' : 'Local CSV fallback',
         queriedAt: new Date().toISOString(),
         data
       };
+      // Always include the ECB request URL the service used (helps frontend display the source link)
+      responsePayload.ecbRequestUrl = ecbService.buildEcbRequestUrl(currencyList, undefined, start, end);
+      return responsePayload;
     } catch (error: any) {
       fastify.log.error({ err: error }, 'Error in /api/bce-exchange/history');
       

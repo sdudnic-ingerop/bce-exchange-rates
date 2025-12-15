@@ -22,6 +22,7 @@ interface ExchangeRate {
   rate: number;
   flag: string;
   date?: string;
+  trend?: 'up' | 'down' | 'equal';
 }
 
 interface HistoryPoint {
@@ -38,6 +39,7 @@ interface ExchangeResponse {
   base: string;
   rates: ExchangeRate[];
   message?: string;
+  ecbRequestUrl?: string;
 }
 
 interface HistoryResponse {
@@ -82,45 +84,42 @@ export class AppComponent implements OnInit, AfterViewInit {
   private apiBase = this.getApiBase();
   
   // Available currencies
-  availableCurrencies = [
-    'USD', 'GBP', 'CHF', 'JPY', 'CAD', 'AUD', 'NZD', 'SEK', 'NOK', 'DKK',
-    'PLN', 'CZK', 'HUF', 'RON', 'BGN', 'HRK', 'RUB', 'TRY', 'BRL', 'CNY',
-    'HKD', 'IDR', 'ILS', 'INR', 'KRW', 'MXN', 'MYR', 'PHP', 'SGD', 'THB', 'ZAR'
-  ];
+  availableCurrencies: string[] = [];
+  
+  currencyFlags: { [code: string]: string } = {};
 
-  // Map currency code to French country name (used for search by country)
-  currencyToCountry: { [code: string]: string } = {
-    'USD': 'États-Unis',
-    'GBP': 'Royaume-Uni',
-    'CHF': 'Suisse',
-    'JPY': 'Japon',
-    'CAD': 'Canada',
-    'AUD': 'Australie',
-    'NZD': 'Nouvelle-Zélande',
-    'SEK': 'Suède',
-    'NOK': 'Norvège',
-    'DKK': 'Danemark',
-    'PLN': 'Pologne',
-    'CZK': 'République Tchèque',
-    'HUF': 'Hongrie',
-    'RON': 'Roumanie',
-    'BGN': 'Bulgarie',
-    'HRK': 'Croatie',
-    'RUB': 'Russie',
-    'TRY': 'Turquie',
-    'BRL': 'Brésil',
-    'CNY': 'Chine',
-    'HKD': 'Hong Kong',
-    'IDR': 'Indonésie',
-    'ILS': 'Israël',
-    'INR': 'Inde',
-    'KRW': 'Corée du Sud',
-    'MXN': 'Mexique',
-    'MYR': 'Malaisie',
-    'PHP': 'Philippines',
-    'SGD': 'Singapour',
-    'THB': 'Thaïlande',
-    'ZAR': 'Afrique du Sud'
+  // Map currency code to French currency name
+  currencyNames: { [code: string]: string } = {
+    'USD': 'Dollar américain',
+    'JPY': 'Yen japonais',
+    'BGN': 'Lev bulgare',
+    'CZK': 'Couronne tchèque',
+    'DKK': 'Couronne danoise',
+    'GBP': 'Livre sterling',
+    'HUF': 'Forint hongrois',
+    'PLN': 'Zloty polonais',
+    'RON': 'Leu roumain',
+    'SEK': 'Couronne suédoise',
+    'CHF': 'Franc suisse',
+    'ISK': 'Couronne islandaise',
+    'NOK': 'Couronne norvégienne',
+    'TRY': 'Livre turque',
+    'AUD': 'Dollar australien',
+    'BRL': 'Réal brésilien',
+    'CAD': 'Dollar canadien',
+    'CNY': 'Yuan renminbi chinois',
+    'HKD': 'Dollar de Hong Kong',
+    'IDR': 'Roupie indonésienne',
+    'ILS': 'Shekel israélien',
+    'INR': 'Roupie indienne',
+    'KRW': 'Won sud-coréen',
+    'MXN': 'Peso mexicain',
+    'MYR': 'Ringgit malaisien',
+    'NZD': 'Dollar néo-zélandais',
+    'PHP': 'Peso philippin',
+    'SGD': 'Dollar de Singapour',
+    'THB': 'Baht thaïlandais',
+    'ZAR': 'Rand sud-africain'
   };
   
   // State
@@ -140,7 +139,12 @@ export class AppComponent implements OnInit, AfterViewInit {
   loading: boolean = false;
   error: string | null = null;
   apiResponseExample: string = '';
+  ecbSourceUrl: string = '';
   
+  // Pagination
+  currentPage: number = 0;
+  pageSize: number = 20;
+
   // Chart
   chart: Chart | null = null;
   chartRetryCount: number = 0;
@@ -151,12 +155,35 @@ export class AppComponent implements OnInit, AfterViewInit {
     // Set maxDate to today
     this.maxDate = new Date();
     
+    // Load available currencies from backend
+    this.loadAvailableCurrencies();
+    
     // selectedDate starts as null (will fetch latest available)
     
     // Set docs URL
     this.docsUrl = this.buildApiUrl('/docs');
     
     console.log('Initial state: no specific date selected, will fetch latest available');
+  }
+  
+  private loadAvailableCurrencies() {
+    const url = this.buildApiUrl('/api/bce-exchange/currencies');
+    this.http.get<any>(url).subscribe({
+      next: (data) => {
+        if (data.status === 'success' && Array.isArray(data.currencies)) {
+          this.availableCurrencies = data.currencies.map((c: any) => c.code).sort();
+          // Store flag codes for quick lookup
+          data.currencies.forEach((c: any) => {
+            this.currencyFlags[c.code] = c.flag;
+          });
+          console.log('Loaded', this.availableCurrencies.length, 'currencies from backend');
+        }
+      },
+      error: (err) => {
+        console.error('Error loading currencies:', err);
+        // Fallback to empty array, let user fetch manually
+      }
+    });
   }
   
   ngAfterViewInit() {
@@ -200,8 +227,8 @@ export class AppComponent implements OnInit, AfterViewInit {
     // Filter by currency code or French country name
     return this.availableCurrencies.filter(c => {
       if (this.selectedCurrencies.includes(c)) return false;
-      const country = this.currencyToCountry[c] || '';
-      return c.toLowerCase().includes(filter) || country.toLowerCase().includes(filter);
+      const name = this.currencyNames[c] || '';
+      return c.toLowerCase().includes(filter) || name.toLowerCase().includes(filter);
     });
   }
   
@@ -212,7 +239,6 @@ export class AppComponent implements OnInit, AfterViewInit {
         !this.selectedCurrencies.includes(upperCurrency)) {
       this.selectedCurrencies.push(upperCurrency);
       this.currencyFilter = '';
-      this.fetchRatesWithValidation();
     }
   }
   
@@ -220,13 +246,6 @@ export class AppComponent implements OnInit, AfterViewInit {
     const index = this.selectedCurrencies.indexOf(currency);
     if (index >= 0) {
       this.selectedCurrencies.splice(index, 1);
-      if (this.selectedCurrencies.length > 0) {
-        this.fetchRatesWithValidation();
-      } else {
-        this.error = 'Veuillez sélectionner au moins une devise';
-        this.exchangeRates = [];
-        this.historyData = [];
-      }
     }
   }
   
@@ -244,8 +263,17 @@ export class AppComponent implements OnInit, AfterViewInit {
     if (this.availableCurrencies.includes(code) && !this.selectedCurrencies.includes(code)) {
       this.selectedCurrencies = [...this.selectedCurrencies, code];
       this.currencyFilter = '';
-      this.fetchRatesWithValidation();
     }
+  }
+  
+  onCurrencyPanelClosed() {
+    // Called when autocomplete closes or input loses focus
+    this.fetchRatesWithValidation();
+  }
+  
+  clearAllCurrencies() {
+    this.selectedCurrencies = [];
+    this.fetchRatesWithValidation();
   }
   
   // Date Selection
@@ -258,13 +286,11 @@ export class AppComponent implements OnInit, AfterViewInit {
   }
   
   private fetchRatesWithValidation() {
-    if (this.selectedCurrencies.length === 0) {
-      this.error = 'Veuillez sélectionner au moins une devise';
-      return;
-    }
+    // If no currencies selected, we fetch ALL (empty list)
     
     this.loading = true;
     this.error = null;
+    this.currentPage = 0; // Reset pagination
     
     const currencies = this.selectedCurrencies.join(',');
     // If a date is selected, use it; otherwise, don't specify a date (will get latest)
@@ -281,19 +307,17 @@ export class AppComponent implements OnInit, AfterViewInit {
           this.exchangeRates = [];
           this.historyData = [];
         } else {
-          // Update selectedDate to the actual date returned if not already set
-          // if (!this.selectedDate) {
-          //   const returnedDate = new Date(data.date);
-          //   this.selectedDate = returnedDate;
-          // }
           this.error = null;
-          this.exchangeRates = data.rates;
+          const supported = new Set(this.availableCurrencies);
+          this.exchangeRates = (data.rates || []).filter(rate => supported.has(rate.currency));
+          this.ecbSourceUrl = data.ecbRequestUrl || '';
+          
           // Attach the response date to each rate
-          // Attach the response date to each rate (server must provide `ratesUpdateDate`)
           const responseDate = (data as any).ratesUpdateDate;
           this.exchangeRates.forEach(rate => {
             rate.date = responseDate;
           });
+          
           this.updateApiResponseExample();
           console.log('Exchange rates loaded for date:', responseDate, this.exchangeRates);
           this.fetchHistory(responseDate);
@@ -311,10 +335,7 @@ export class AppComponent implements OnInit, AfterViewInit {
   
   // API Calls
   fetchRates() {
-    if (this.selectedCurrencies.length === 0) {
-      this.error = 'Veuillez sélectionner au moins une devise';
-      return;
-    }
+    // Allow empty selection (means ALL)
     
     this.loading = true;
     this.error = null;
@@ -369,7 +390,8 @@ export class AppComponent implements OnInit, AfterViewInit {
           console.error('Error fetching history:', data.message);
           this.historyData = [];
         } else {
-          this.historyData = data.data;
+          const supported = new Set(this.availableCurrencies);
+          this.historyData = data.data.filter(point => supported.has(point.currency));
           this.cdr.detectChanges();
           setTimeout(() => this.updateChart(), 200);
         }
@@ -382,6 +404,11 @@ export class AppComponent implements OnInit, AfterViewInit {
   }
   
   calculateStartDate(endDate: Date): string {
+    if (this.selectedPeriod === 'Tout') {
+      // Start from Euro launch date
+      return '1999-01-01';
+    }
+    
     let days = 365; // Default: Année
     
     if (this.selectedPeriod === 'Mois') days = 30;
@@ -394,7 +421,8 @@ export class AppComponent implements OnInit, AfterViewInit {
   
   // Period Selection
   onPeriodChange() {
-    this.fetchHistory();
+    const dateStr = this.exchangeRates.length > 0 ? this.exchangeRates[0].date : undefined;
+    this.fetchHistory(dateStr);
   }
   
   // Chart Methods
@@ -429,7 +457,7 @@ export class AppComponent implements OnInit, AfterViewInit {
     
     // Get unique dates
     const allDates = [...new Set(this.historyData.map(p => p.date))].sort();
-    const displayLabels = this.filterLabelsToMonths(allDates);
+    // const displayLabels = this.filterLabelsToMonths(allDates);
     
     // Colors for chart lines
     const colors = [
@@ -441,7 +469,14 @@ export class AppComponent implements OnInit, AfterViewInit {
     ];
     
     // Build datasets
-    const datasets = this.selectedCurrencies.map((currency, index) => {
+    // If showing ALL currencies (empty selection), we show all of them
+    const currenciesToShow = this.selectedCurrencies.length > 0 
+      ? this.selectedCurrencies 
+      : Object.keys(datasetsByCurrency);
+    
+    const isHighDensity = currenciesToShow.length > 10;
+
+    const datasets = currenciesToShow.map((currency, index) => {
       const currencyData = datasetsByCurrency[currency] || [];
       const data = allDates.map(date => {
         const point = currencyData.find(p => p.date === date);
@@ -450,30 +485,36 @@ export class AppComponent implements OnInit, AfterViewInit {
       
       const color = colors[index % colors.length];
       
+      // Prepare flag image for point style (legend and hover)
+      const flagImg = new Image();
+      flagImg.src = this.getFlagUrl(this.getCurrencyFlag(currency));
+
       return {
         label: currency,
         data: data,
         borderColor: color.border,
         backgroundColor: color.bg,
         borderWidth: 2,
-        fill: true,
+        showLine: true,
+        fill: !isHighDensity,
         tension: 0.4,
         yAxisID: `y${index}`,
+        pointStyle: flagImg,
         pointRadius: 0,
-        pointHoverRadius: 5
+        pointHoverRadius: 10
       };
     });
     
     // Build Y axes - Adaptive based on number of currencies
     const yAxes: any = {};
-    const numCurrencies = this.selectedCurrencies.length;
+    const numCurrencies = currenciesToShow.length;
     
     // Determine display strategy based on number of currencies
     // 1-3 currencies: Show all axes with labels
     // 4+ currencies: Hide axes but keep independent scales for accurate visualization
     const showAxes = numCurrencies <= 3;
     
-    this.selectedCurrencies.forEach((currency, index) => {
+    currenciesToShow.forEach((currency, index) => {
       const currencyData = datasetsByCurrency[currency] || [];
       const rates = currencyData.map(p => p.rate);
       
@@ -530,15 +571,22 @@ export class AppComponent implements OnInit, AfterViewInit {
           tooltip: {
             backgroundColor: 'rgba(0, 0, 0, 0.8)',
             padding: 12
+          },
+          title: {
+            display: false
           }
         },
         scales: {
           ...yAxes,
           x: {
             ticks: {
+              autoSkip: true,
+              maxTicksLimit: 20,
               callback: (value: any, index: number) => {
                 const date = allDates[index];
-                return displayLabels.includes(date) ? date.substring(5) : '';
+                if (!date) return '';
+                const [year, month, day] = date.split('-');
+                return `${day}/${month}/${year}`;
               },
               maxRotation: 45,
               minRotation: 45
@@ -574,6 +622,31 @@ export class AppComponent implements OnInit, AfterViewInit {
     document.body.removeChild(link);
   }
   
+  exportHistoryCSV() {
+    if (this.historyData.length === 0) return;
+    
+    const currencies = this.selectedCurrencies.length > 0 
+      ? this.selectedCurrencies.join('_') 
+      : 'toutes';
+    
+    let csv = 'Date,Devise,Taux (EUR)\n';
+    this.historyData.forEach(point => {
+      csv += `${point.date},${point.currency},${point.rate.toFixed(4)}\n`;
+    });
+    
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    const periodLabel = this.selectedPeriod.toLowerCase().replace(' ', '_');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `historique_${currencies}_${periodLabel}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+  
   getCSVOutput(): string {
     if (this.exchangeRates.length === 0) return '';
     
@@ -587,9 +660,10 @@ export class AppComponent implements OnInit, AfterViewInit {
   
   getApiRequestUrl(): string {
     const currencies = this.selectedCurrencies.join(',');
-    const date = this.formatDateForApi(this.selectedDate);
-    const baseUrl = this.apiBase ? `${this.apiBase}/api/bce-exchange` : '/api/bce-exchange';
-    return `${baseUrl}?currencies=${currencies}&date=${date}`;
+    const dateParam = this.selectedDate ? `&date=${this.formatDateForApi(this.selectedDate)}` : '';
+    // Always show full URL with protocol and host
+    const fullBase = this.apiBase || window.location.origin;
+    return `${fullBase}/api/bce-exchange?currencies=${currencies}${dateParam}`;
   }
   updateApiResponseExample() {
     if (this.exchangeRates.length === 0) {
@@ -658,42 +732,33 @@ export class AppComponent implements OnInit, AfterViewInit {
     return `https://flagcdn.com/24x18/${flag}.png`;
   }
 
+  getFlagEmoji(countryCode: string): string {
+    const codePoints = countryCode
+      .toUpperCase()
+      .split('')
+      .map(char =>  127397 + char.charCodeAt(0));
+    return String.fromCodePoint(...codePoints);
+  }
+
   getCurrencyFlag(currency: string): string {
-    // Map currencies to flag codes
+    // First check if we loaded it from backend
+    if (this.currencyFlags[currency]) {
+      return this.currencyFlags[currency];
+    }
+    
+    // Fallback to country flag codes for all currencies
     const flagMap: { [key: string]: string } = {
-      'USD': 'us',
-      'GBP': 'gb',
-      'CHF': 'ch',
-      'JPY': 'jp',
-      'CAD': 'ca',
-      'AUD': 'au',
-      'NZD': 'nz',
-      'SEK': 'se',
-      'NOK': 'no',
-      'DKK': 'dk',
-      'PLN': 'pl',
-      'CZK': 'cz',
-      'HUF': 'hu',
-      'RON': 'ro',
-      'BGN': 'bg',
-      'HRK': 'hr',
-      'RUB': 'ru',
-      'TRY': 'tr',
-      'BRL': 'br',
-      'CNY': 'cn',
-      'HKD': 'hk',
-      'IDR': 'id',
-      'ILS': 'il',
-      'INR': 'in',
-      'KRW': 'kr',
-      'MXN': 'mx',
-      'MYR': 'my',
-      'PHP': 'ph',
-      'SGD': 'sg',
-      'THB': 'th',
-      'ZAR': 'za'
+      'ARS': 'ar', 'AUD': 'au', 'BGN': 'bg', 'BRL': 'br', 'CAD': 'ca',
+      'CHF': 'ch', 'CNY': 'cn', 'CYP': 'cy', 'CZK': 'cz', 'DKK': 'dk',
+      'DZD': 'dz', 'EEK': 'ee', 'GBP': 'gb', 'GRD': 'gr', 'HKD': 'hk',
+      'HRK': 'hr', 'HUF': 'hu', 'IDR': 'id', 'ILS': 'il', 'INR': 'in',
+      'ISK': 'is', 'JPY': 'jp', 'KRW': 'kr', 'LTL': 'lt', 'LVL': 'lv',
+      'MAD': 'ma', 'MTL': 'mt', 'MXN': 'mx', 'MYR': 'my', 'NOK': 'no',
+      'NZD': 'nz', 'PHP': 'ph', 'PLN': 'pl', 'RON': 'ro', 'RUB': 'ru',
+      'SEK': 'se', 'SGD': 'sg', 'SIT': 'si', 'SKK': 'sk', 'THB': 'th',
+      'TRY': 'tr', 'TWD': 'tw', 'USD': 'us', 'ZAR': 'za'
     };
-    return flagMap[currency] || 'eu';
+    return flagMap[currency] || 'xx';
   }
 
   private filterLabelsToMonths(dates: string[]): string[] {
@@ -709,5 +774,43 @@ export class AppComponent implements OnInit, AfterViewInit {
     });
     
     return monthlyLabels;
+  }
+
+  // Pagination helpers
+  get paginatedRates(): ExchangeRate[] {
+    const start = this.currentPage * this.pageSize;
+    return this.exchangeRates.slice(start, start + this.pageSize);
+  }
+  
+  get chartStartDate(): string {
+    if (this.historyData.length === 0) return '';
+    const dates = [...new Set(this.historyData.map(p => p.date))].sort();
+    return dates.length > 0 ? this.formatDateForDisplay(this.parseDate(dates[0])) : '';
+  }
+  
+  get chartEndDate(): string {
+    if (this.historyData.length === 0) return '';
+    const dates = [...new Set(this.historyData.map(p => p.date))].sort();
+    return dates.length > 0 ? this.formatDateForDisplay(this.parseDate(dates[dates.length - 1])) : '';
+  }
+  
+  get currencyCount(): number {
+    return this.exchangeRates.length;
+  }
+
+  get totalPages(): number {
+    return Math.ceil(this.exchangeRates.length / this.pageSize);
+  }
+
+  nextPage() {
+    if (this.currentPage < this.totalPages - 1) {
+      this.currentPage++;
+    }
+  }
+
+  prevPage() {
+    if (this.currentPage > 0) {
+      this.currentPage--;
+    }
   }
 }
