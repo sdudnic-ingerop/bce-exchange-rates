@@ -1,12 +1,12 @@
 <section class="docs-section">
   <h2>Documentation API</h2>
-  <p class="intro-text">Consultez les taux de change EUR à travers nos deux endpoints principaux. Vous pouvez aussi interroger directement l'API officielle de la BCE (SDW) si vous souhaitez récupérer la réponse brute — notez que la réponse BCE contient beaucoup de métadonnées et n'est pas simplifiée par défaut.</p>
+  <p class="intro-text">Consultez les taux de change EUR via nos endpoints proxy simplifiés (usage développement/test). Pour des données brutes et autoritatives, utilisez les endpoints SDW de la BCE indiqués ci-dessous — les réponses sont verbeuses et nécessitent un parsing spécifique.</p>
   
   <!-- Endpoint 1: Current Rates -->
   <div class="endpoint-card">
     <div class="endpoint-header">
       <span class="method get">GET</span>
-      <span class="endpoint-path">/api/bce-exchange</span>
+      <span class="endpoint-path">{{ getApiUrl('/api/bce-exchange') }}</span>
     </div>
     
     <h3>Obtenir les taux actuels</h3>
@@ -33,7 +33,7 @@
       <div class="example">
         <p><strong>Exemple 1:</strong> Taux actuels USD, GBP, CHF</p>
         <div class="code-block">
-          <code>GET /api/bce-exchange?currencies=USD,GBP,CHF</code>
+          <code>GET {{ getApiUrl('/api/bce-exchange') }}?currencies=USD,GBP,CHF</code>
         </div>
         <p class="response-label">Réponse:</p>
         <pre><code>{{`{
@@ -51,7 +51,7 @@
       <div class="example">
         <p><strong>Exemple 2:</strong> Taux à une date spécifique</p>
         <div class="code-block">
-          <code>GET /api/bce-exchange?currencies=JPY&date=2025-12-01</code>
+          <code>GET {{ getApiUrl('/api/bce-exchange') }}?currencies=JPY&date=2025-12-01</code>
         </div>
         <p class="response-label">Réponse:</p>
         <pre><code>{{`{
@@ -96,7 +96,7 @@
   <div class="endpoint-card">
     <div class="endpoint-header">
       <span class="method get">GET</span>
-      <span class="endpoint-path">/api/bce-exchange/latest-date</span>
+      <span class="endpoint-path">{{ getApiUrl('/api/bce-exchange/latest-date') }}</span>
     </div>
     
     <h3>Obtenir la dernière date disponible</h3>
@@ -117,7 +117,7 @@
       <h4>Exemple</h4>
       <div class="example">
         <div class="code-block">
-          <code>GET /api/bce-exchange/latest-date?currency=CHF</code>
+          <code>GET {{ getApiUrl('/api/bce-exchange/latest-date') }}?currency=CHF</code>
         </div>
         <p class="response-label">Réponse:</p>
         <pre><code>{{`{
@@ -134,7 +134,7 @@
   <div class="endpoint-card">
     <div class="endpoint-header">
       <span class="method get">GET</span>
-      <span class="endpoint-path">/api/bce-exchange/history</span>
+      <span class="endpoint-path">{{ getApiUrl('/api/bce-exchange/history') }}</span>
     </div>
     
     <h3>Obtenir l'historique des taux</h3>
@@ -166,7 +166,7 @@
       <div class="example">
         <p><strong>Exemple:</strong> Historique USD du dernier mois</p>
         <div class="code-block">
-          <code>GET /api/bce-exchange/history?currencies=USD&start=2025-11-05&end=2025-12-05</code>
+          <code>GET {{ getApiUrl('/api/bce-exchange/history') }}?currencies=USD&start=2025-11-05&end=2025-12-05</code>
         </div>
         <p class="response-label">Réponse:</p>
         <pre><code>{{`{
@@ -188,7 +188,7 @@
   <div class="endpoint-card">
     <div class="endpoint-header">
       <span class="method get">GET</span>
-      <span class="endpoint-path">/api/health</span>
+      <span class="endpoint-path">{{ getApiUrl('/api/health') }}</span>
     </div>
     
     <h3>Vérifier l'état du service</h3>
@@ -198,7 +198,7 @@
       <h4>Exemple</h4>
       <div class="example">
         <div class="code-block">
-          <code>GET /api/health</code>
+          <code>GET {{ getApiUrl('/api/health') }}</code>
         </div>
         <p class="response-label">Réponse:</p>
         <pre><code>{{`{
@@ -216,7 +216,7 @@
     </div>
     
     <h3>Interroger directement l'API officielle (SDW)</h3>
-    <p>Si vous souhaitez la réponse brute de la BCE sans simplification ni cache.</p>
+    <p>Pour obtenir les données non modifiées fournies par la BCE (SDW), utilisez les URLs <strong>https://data-api.ecb.europa.eu/service/data/</strong> avec les séries EXR correspondantes. Les exemples ci-dessous montrent comment interroger la SDW pour des séries précises ou pour toutes les séries.</p>
     
     <div class="examples-section">
       <h4>Exemple: Taux CHF</h4>
@@ -268,7 +268,7 @@
     
     <div class="mapping-section">
       <h4>Comparaison: Réponse simplifiée (notre API proxy)</h4>
-      <p>Le même appel via notre `/api/bce-exchange?currencies=CHF` retourne:</p>
+      <p>Le même appel via notre `{{ getApiUrl('/api/bce-exchange') }}?currencies=CHF` retourne:</p>
       <pre><code>{{`{
       "status": "success",
       "ratesUpdateDate": "2025-12-06",

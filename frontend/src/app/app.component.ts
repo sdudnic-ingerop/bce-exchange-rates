@@ -12,6 +12,7 @@ import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatNativeDateModule, DateAdapter, MAT_DATE_FORMATS } from '@angular/material/core';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { Chart, ChartConfiguration, registerables } from 'chart.js';
+import { TimeoutError, finalize, timeout } from 'rxjs';
 import { FrenchDateAdapter, FRENCH_DATE_FORMATS } from './date-adapter';
 import { DocsSectionComponent } from './docs-section/docs-section.component';
 
@@ -50,6 +51,15 @@ interface HistoryResponse {
   message?: string;
 }
 
+interface CetParts {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  weekday: number;
+}
+
 @Component({
   selector: 'app-root',
   standalone: true,
@@ -82,6 +92,17 @@ export class AppComponent implements OnInit, AfterViewInit {
   
   // API Configuration
   private apiBase = this.getApiBase();
+  private readonly requestTimeoutMs = 5000;
+  private readonly noDataMessage = 'Pas de data ou data pas retournés dans les temps attendus.';
+  private readonly cetFormatter = new Intl.DateTimeFormat('fr-FR', {
+    timeZone: 'Europe/Brussels',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  });
   
   // Available currencies
   availableCurrencies: string[] = [];
@@ -123,17 +144,26 @@ export class AppComponent implements OnInit, AfterViewInit {
   };
   
   // State
-  selectedCurrencies: string[] = ['CHF', 'MXN'];
+  selectedCurrencies: string[] = [];
   selectedDate: Date | null = null;
   maxDate: Date = new Date();
   selectedPeriod: string = 'Année';
   currencyFilter: string = '';
   currentView: 'home' | 'docs' = 'home';
   docsUrl: string = '';
+  appVersion: string = '1.0.0';
+  footerYear: number = new Date().getFullYear();
+
+  // Footer label: show range only when different from start year
+  get footerLabel(): string {
+    const start = 2025;
+    return this.footerYear && this.footerYear > start ? `DSN Ingérop, ${start} - ${this.footerYear}` : `DSN Ingérop, ${start}`;
+  }
   
   // Data
   exchangeRates: ExchangeRate[] = [];
   historyData: HistoryPoint[] = [];
+  referenceDate: string = '';
   
   // UI State
   loading: boolean = false;
@@ -268,11 +298,32 @@ export class AppComponent implements OnInit, AfterViewInit {
   
   onCurrencyPanelClosed() {
     // Called when autocomplete closes or input loses focus
-    this.fetchRatesWithValidation();
+    // Validate selection on blur
+    this.applyCurrencySelection();
   }
   
   clearAllCurrencies() {
     this.selectedCurrencies = [];
+    this.fetchRatesWithValidation();
+  }
+
+  /**
+   * Apply the current selection: add typed filter as currency (if valid)
+   * and then trigger a data reload.
+   */
+  applyCurrencySelection() {
+    const filterValue = (this.currencyFilter || '').trim();
+    if (filterValue) {
+      // If user typed a currency code directly, try to add it
+      const code = filterValue.toUpperCase();
+      if (this.availableCurrencies.includes(code) && !this.selectedCurrencies.includes(code)) {
+        this.selectedCurrencies = [...this.selectedCurrencies, code];
+      }
+    }
+
+    // Clear the input and refresh data
+    this.currencyFilter = '';
+    // Reload rates and history
     this.fetchRatesWithValidation();
   }
   
@@ -284,6 +335,44 @@ export class AppComponent implements OnInit, AfterViewInit {
     // Validate date availability when user changes it
     this.fetchRatesWithValidation();
   }
+
+  disableUnavailableDates = (date: Date | null): boolean => {
+    if (!date) return false;
+    const candidate = this.getCETParts(date);
+    // Block Saturdays (6) and Sundays (0)
+    if (candidate.weekday === 0 || candidate.weekday === 6) {
+      return false;
+    }
+
+    const now = this.getCETParts(new Date());
+    const isToday = this.isSameCETDay(candidate, now);
+    if (isToday && now.hour < 16) {
+      return false;
+    }
+
+    return true;
+  };
+
+  private getCETParts(date: Date): CetParts {
+    const parts = this.cetFormatter.formatToParts(date);
+    const get = (type: string): number => {
+      const value = parts.find(p => p.type === type)?.value;
+      return value ? parseInt(value, 10) : 0;
+    };
+    const year = get('year');
+    const month = get('month');
+    const day = get('day');
+    const hour = get('hour');
+    const minute = get('minute');
+    // Rebuild a UTC date using the CET components to derive the weekday correctly
+    const utcMs = Date.UTC(year, month - 1, day, hour, minute);
+    const weekday = new Date(utcMs).getUTCDay();
+    return { year, month, day, hour, minute, weekday };
+  }
+
+  private isSameCETDay(a: CetParts, b: CetParts): boolean {
+    return a.year === b.year && a.month === b.month && a.day === b.day;
+  }
   
   private fetchRatesWithValidation() {
     // If no currencies selected, we fetch ALL (empty list)
@@ -291,6 +380,7 @@ export class AppComponent implements OnInit, AfterViewInit {
     this.loading = true;
     this.error = null;
     this.currentPage = 0; // Reset pagination
+    const requestedDate = this.selectedDate ? this.formatDateForApi(this.selectedDate) : null;
     
     const currencies = this.selectedCurrencies.join(',');
     // If a date is selected, use it; otherwise, don't specify a date (will get latest)
@@ -299,36 +389,50 @@ export class AppComponent implements OnInit, AfterViewInit {
     
     console.log('Fetching from:', url);
     
-    this.http.get<ExchangeResponse>(url).subscribe({
+    this.http.get<ExchangeResponse>(url).pipe(
+      timeout(this.requestTimeoutMs),
+      finalize(() => {
+        this.loading = false;
+      })
+    ).subscribe({
       next: (data) => {
         console.log('API Response:', data);
-        if (data.status === 'error') {
-          this.error = `Erreur: ${data.message}`;
+        if (data.status === 'error' || !data.rates || data.rates.length === 0) {
+          this.error = this.noDataMessage;
           this.exchangeRates = [];
           this.historyData = [];
-        } else {
-          this.error = null;
-          const supported = new Set(this.availableCurrencies);
-          this.exchangeRates = (data.rates || []).filter(rate => supported.has(rate.currency));
-          this.ecbSourceUrl = data.ecbRequestUrl || '';
-          
-          // Attach the response date to each rate
-          const responseDate = (data as any).ratesUpdateDate;
-          this.exchangeRates.forEach(rate => {
-            rate.date = responseDate;
-          });
-          
-          this.updateApiResponseExample();
-          console.log('Exchange rates loaded for date:', responseDate, this.exchangeRates);
-          this.fetchHistory(responseDate);
+          this.ecbSourceUrl = '';
+          this.referenceDate = this.resolveReferenceDate(data.ratesUpdateDate || requestedDate);
+          return;
         }
-        this.loading = false;
+
+        this.error = null;
+        const supported = new Set(this.availableCurrencies);
+        this.exchangeRates = (data.rates || []).filter(rate => supported.has(rate.currency));
+        this.ecbSourceUrl = data.ecbRequestUrl || '';
+        
+        const responseDate = (data as any).ratesUpdateDate;
+        this.referenceDate = this.resolveReferenceDate(responseDate || requestedDate);
+
+        this.exchangeRates.forEach(rate => {
+          rate.date = this.referenceDate;
+        });
+        
+        this.updateApiResponseExample();
+        console.log('Exchange rates loaded for date:', this.referenceDate, this.exchangeRates);
+        this.fetchHistory(this.referenceDate);
       },
       error: (err) => {
         console.error('API Error:', err);
-        this.error = `Erreur lors de la récupération des données: ${err.message}`;
+        if (err instanceof TimeoutError) {
+          this.error = this.noDataMessage;
+        } else {
+          this.error = `Erreur lors de la récupération des données: ${err.message}`;
+        }
         this.exchangeRates = [];
-        this.loading = false;
+        this.historyData = [];
+        this.ecbSourceUrl = '';
+        this.referenceDate = this.resolveReferenceDate(requestedDate);
       }
     });
   }
@@ -393,7 +497,7 @@ export class AppComponent implements OnInit, AfterViewInit {
           const supported = new Set(this.availableCurrencies);
           this.historyData = data.data.filter(point => supported.has(point.currency));
           this.cdr.detectChanges();
-          setTimeout(() => this.updateChart(), 200);
+          setTimeout(() => this.updateChart(), 100);
         }
       },
       error: (err) => {
@@ -429,11 +533,13 @@ export class AppComponent implements OnInit, AfterViewInit {
   updateChart() {
     if (this.currentView !== 'home' || !this.viewInitialized) return;
     
+    this.cdr.detectChanges();
+    
     const canvas = this.chartCanvas?.nativeElement;
     if (!canvas) {
       this.chartRetryCount++;
       if (this.chartRetryCount < 5) {
-        setTimeout(() => this.updateChart(), 500);
+        setTimeout(() => this.updateChart(), 300);
       }
       return;
     }
@@ -603,7 +709,7 @@ export class AppComponent implements OnInit, AfterViewInit {
   exportCSV() {
     if (this.exchangeRates.length === 0) return;
     
-    const date = this.formatDateForApi(this.selectedDate);
+    const date = this.referenceDate || this.formatDateForApi(this.selectedDate);
     
     let csv = 'Devise,Taux (EUR),Date\n';
     this.exchangeRates.forEach(rate => {
@@ -650,7 +756,7 @@ export class AppComponent implements OnInit, AfterViewInit {
   getCSVOutput(): string {
     if (this.exchangeRates.length === 0) return '';
     
-    const date = this.formatDateForApi(this.selectedDate);
+    const date = this.referenceDate || this.formatDateForApi(this.selectedDate);
     let csv = 'Devise,Taux (EUR),Date\n';
     this.exchangeRates.forEach(rate => {
       csv += `${rate.currency},${rate.rate.toFixed(4)},${date}\n`;
@@ -665,6 +771,74 @@ export class AppComponent implements OnInit, AfterViewInit {
     const fullBase = this.apiBase || window.location.origin;
     return `${fullBase}/api/bce-exchange?currencies=${currencies}${dateParam}`;
   }
+
+  /**
+   * Generate history ECB URL for the selected period
+   */
+  getHistoryEcbUrl(): string {
+    if (this.historyData.length === 0) return '';
+    
+    const dates = [...new Set(this.historyData.map(p => p.date))].sort();
+    if (dates.length === 0) return '';
+    
+    const startDate = dates[0];
+    const endDate = dates[dates.length - 1];
+    
+    // ECB API format for historical data: EXR/D..EUR.SP00.A?start=YYYY-MM-DD&end=YYYY-MM-DD
+    return `https://data-api.ecb.europa.eu/service/data/EXR/D..EUR.SP00.A?start=${startDate}&end=${endDate}&format=jsondata`;
+  }
+
+  /**
+   * Build a direct ECB SDW URL for the current selection (current rates or a single date).
+   * If no currencies are selected, uses the wildcard series (EXR/D..EUR.SP00.A).
+   */
+  getCurrentEcbUrl(): string {
+    const date = this.referenceDate || this.formatDateForApi(this.selectedDate) || '';
+    let seriesSegment: string;
+    if (this.selectedCurrencies && this.selectedCurrencies.length > 0) {
+      // Build one or more series for selected currencies
+      seriesSegment = this.selectedCurrencies
+        .map(c => `EXR/D.${c}.EUR.SP00.A`)
+        .join(',');
+    } else {
+      // Use wildcard series (all currencies)
+      seriesSegment = 'EXR/D..EUR.SP00.A';
+    }
+
+    const params = date ? `?startPeriod=${date}&endPeriod=${date}&format=jsondata` : '?format=jsondata';
+    return `https://data-api.ecb.europa.eu/service/data/${seriesSegment}${params}`;
+  }
+
+  /**
+   * Generate history API Ingérop URL for the selected period
+   */
+  getHistoryApiUrl(): string {
+    if (this.historyData.length === 0) return '';
+    
+    const dates = [...new Set(this.historyData.map(p => p.date))].sort();
+    if (dates.length === 0) return '';
+    
+    const startDate = dates[0];
+    const endDate = dates[dates.length - 1];
+    const currencies = this.selectedCurrencies.join(',');
+    
+    const fullBase = this.apiBase || window.location.origin;
+    return `${fullBase}/api/bce-exchange/history?currencies=${currencies}&start=${startDate}&end=${endDate}`;
+  }
+
+  private resolveReferenceDate(fallback?: string | null): string {
+    if (fallback) {
+      return fallback;
+    }
+
+    const selected = this.formatDateForApi(this.selectedDate);
+    if (selected) {
+      return selected;
+    }
+
+    return this.formatDateForApi(new Date());
+  }
+
   updateApiResponseExample() {
     if (this.exchangeRates.length === 0) {
       this.apiResponseExample = '';
@@ -674,7 +848,7 @@ export class AppComponent implements OnInit, AfterViewInit {
     const response = {
       status: 'success',
       // Use `ratesUpdateDate` as the canonical field in examples
-      ratesUpdateDate: this.formatDateForApi(this.selectedDate) || this.exchangeRates[0]?.date || '',
+      ratesUpdateDate: this.referenceDate || this.formatDateForApi(this.selectedDate) || this.exchangeRates[0]?.date || '',
       base: 'EUR',
       rates: this.exchangeRates.map(rate => ({
         currency: rate.currency,
@@ -695,6 +869,41 @@ export class AppComponent implements OnInit, AfterViewInit {
     if (view === 'home') {
       setTimeout(() => this.updateChart(), 100);
     }
+  }
+
+  /**
+   * Handle link icon click: copy URL and show confirmation
+   */
+  handleLinkClick(event: Event, url: string) {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    navigator.clipboard.writeText(url).then(() => {
+      console.log('URL copiée au presse-papiers:', url);
+      // Show brief feedback (can be enhanced with a snackbar/toast)
+      this.showCopyFeedback();
+    }).catch(err => {
+      console.error('Erreur lors de la copie:', err);
+    });
+  }
+
+  /**
+   * Show feedback when link is copied
+   */
+  private showCopyFeedback() {
+    // Could use a snackbar here, for now just console log
+    // This could be enhanced with Material snackbar if needed
+  }
+
+  /**
+   * Copy text to clipboard (legacy method, kept for compatibility)
+   */
+  copyToClipboard(text: string) {
+    navigator.clipboard.writeText(text).then(() => {
+      console.log('Lien copié au presse-papiers');
+    }).catch(err => {
+      console.error('Erreur lors de la copie:', err);
+    });
   }
   
   // Open Scalar API Documentation

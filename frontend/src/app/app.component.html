@@ -1,8 +1,8 @@
 <header>
   <div class="container">
     <div class="header-content">
-      <a class="logo" (click)="navigateTo('home')" style="cursor: pointer;">
-        <img src="/ecb_logo.svg" alt="BCE Logo" style="height: 40px; width: auto;">
+      <a class="logo" (click)="navigateTo('home')">
+        <img src="/ecb_logo.svg" alt="BCE Logo">
         <h1>Taux de Change BCE - Ingérop</h1>
       </a>
       <nav>
@@ -18,20 +18,27 @@
 </header>
 
 <main class="container">
+  <div class="dev-warning-banner" role="alert" aria-live="polite">
+    <mat-icon class="dev-warning-icon">warning</mat-icon>
+    <div class="dev-warning-text">
+      <strong>Site de développement.</strong>
+      <div>
+        <p>Données BCE transformées pour tests internes (possibles retards/incomplétudes). Pour des données brutes, utilisez les liens BCE via les icônes "BCE" ou les endpoints SDW dans la section Docs. Les endpoints locaux sont réservés au développement.</p>
+        <p>Disponibilité: publication BCE vers 16h00 CET les jours ouvrables (hors fermetures TARGET) après la concertation (~14h10 CET). Avant cette heure ou en cas de fermeture, il peut n'y avoir aucune donnée.</p>
+        <p>Doc officielle: <a href="https://data.ecb.europa.eu/help/api/data" target="_blank" rel="noopener noreferrer">API BCE</a>.</p>
+      </div>
+    </div>
+  </div>
   <!-- Home View -->
   <div *ngIf="currentView === 'home'">
-    <!-- Info Text Section -->
-    <section class="info-section">
-      <h2>Taux de référence de l'euro</h2>
-      <div class="info-content">
-        <p>Les taux de référence sont généralement mis à jour vers 16h00 CET chaque jour ouvrable, sauf les jours de fermeture de TARGET.</p>
-        <p>Ils sont basés sur la procédure de concertation quotidienne entre les banques centrales de toute l'Europe, qui a normalement lieu vers 14h10 CET. Les taux de référence sont publiés à titre informatif uniquement. L'utilisation des taux à des fins de transaction est fortement déconseillée.</p>
+    <!-- Current date banner -->
+    <div class="date-banner" *ngIf="referenceDate">
+      <div class="date-left">
+        <span class="date-label">Date de référence&nbsp;:</span>
+        <span class="date-value">{{ formatDateForDisplay(parseDate(referenceDate)) }}</span>
       </div>
-      <div class="info-date" *ngIf="exchangeRates.length > 0">
-        <h3>{{ formatDateForDisplay(parseDate(exchangeRates[0].date || '')) }}</h3>
-        <p>Toutes les devises cotées par rapport à l'euro (devise de base)</p>
-      </div>
-    </section>
+      <div class="date-right">Toutes les devises cotées par rapport à l'EUR (devise de base)</div>
+    </div>
 
     <!-- Controls Section -->
     <section class="controls-section">
@@ -41,7 +48,7 @@
           <mat-chip-grid #chipGrid>
             <mat-chip-row *ngFor="let currency of selectedCurrencies" 
                           (removed)="removeCurrency(currency)">
-              <img [src]="getFlagUrl(getCurrencyFlag(currency))" [alt]="currency" style="width: 20px; height: 15px; margin-right: 4px;">
+              <img class="chip-flag" [src]="getFlagUrl(getCurrencyFlag(currency))" [alt]="currency">
               {{ currency }}
               <button matChipRemove>
                 <mat-icon>cancel</mat-icon>
@@ -51,18 +58,30 @@
               placeholder="Chercher par code ou pays..."
               [matChipInputFor]="chipGrid"
               [(ngModel)]="currencyFilter"
+              (keydown)="onCurrencyInput($event)"
               [matAutocomplete]="auto"
               (blur)="onCurrencyPanelClosed()"
             />
           </mat-chip-grid>
           <mat-autocomplete #auto="matAutocomplete" (optionSelected)="selectCurrency($event.option.value)" (closed)="onCurrencyPanelClosed()">
             <mat-option *ngFor="let code of filteredCurrencies" [value]="code">
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <img [src]="getFlagUrl(getCurrencyFlag(code))" [alt]="code" style="width: 20px; height: 15px;">
+              <div class="currency-option">
+                <img class="option-flag" [src]="getFlagUrl(getCurrencyFlag(code))" [alt]="code">
                 <span><strong>{{ code }}</strong> — {{ currencyNames[code] }}</span>
               </div>
             </mat-option>
           </mat-autocomplete>
+          <button 
+            *ngIf="selectedCurrencies.length > 0 || currencyFilter" 
+            matSuffix 
+            mat-icon-button 
+            (click)="applyCurrencySelection()" 
+            title="Valider la sélection"
+            [matTooltip]="'Valider la sélection'"
+          >
+            <mat-icon class="validate-icon">check</mat-icon>
+          </button>
+
           <button 
             *ngIf="selectedCurrencies.length > 0" 
             matSuffix 
@@ -84,6 +103,7 @@
             [matDatepicker]="picker"
             [(ngModel)]="selectedDate" 
             (dateChange)="onDateChange()"
+            [matDatepickerFilter]="disableUnavailableDates"
             [max]="maxDate"
             placeholder="Laisser vide pour le taux le plus récent"
           />
@@ -96,7 +116,7 @@
             (click)="selectedDate = null; onDateChange()" 
             title="Supprimer la date"
             [matTooltip]="'Supprimer la date'"
-            style="position: absolute; right: 50px;"
+            class="date-clear-button"
           >
             <mat-icon>clear</mat-icon>
           </button>
@@ -118,50 +138,67 @@
       <!-- Left Column: Table and CSV -->
       <section class="table-section">
         <div class="section-header">
-          <div class="section-title">Taux ({{ currencyCount }} devise{{ currencyCount > 1 ? 's' : '' }})</div>
-          <button 
-            class="icon-button-csv" 
-            (click)="exportCSV()" 
-            [disabled]="exchangeRates.length === 0"
-            title="Télécharger les taux en CSV"
-            [matTooltip]="'Télécharger les taux en CSV'"
-          >
-            <mat-icon>download</mat-icon>
-          </button>
+          <div class="section-title">Au {{ formatDateForDisplay(parseDate(exchangeRates[0]?.date || '')) }} ({{ currencyCount }} devise{{ currencyCount > 1 ? 's' : '' }})</div>
+          <div class="header-controls">
+            <div class="header-links">
+              <div class="link-pair" *ngIf="ecbSourceUrl">
+                <span class="link-label">BCE:</span>
+                <a [href]="getCurrentEcbUrl()" (click)="handleLinkClick($event, getCurrentEcbUrl())" class="link-icon" title="Copier le lien vers la réponse brute de la BCE">
+                  <mat-icon>link</mat-icon>
+                </a>
+              </div>
+              
+              <div class="link-pair">
+                <span class="link-label">Local:</span>
+                <a [href]="getApiRequestUrl()" (click)="handleLinkClick($event, getApiRequestUrl())" class="link-icon" title="Copier le lien">
+                  <mat-icon>link</mat-icon>
+                </a>
+              </div>
+            </div>
+            <button 
+              class="icon-button-csv" 
+              (click)="exportCSV()" 
+              [disabled]="exchangeRates.length === 0"
+              title="Télécharger les taux en CSV"
+              [matTooltip]="'Télécharger les taux en CSV'"
+            >
+              <mat-icon>download</mat-icon>
+            </button>
+          </div>
         </div>
 
         <table>
           <thead>
             <tr>
-              <th class="table-header">Devise</th>
-              <th class="table-header" style="text-align: right;">Taux</th>
-              <th class="table-header" style="text-align: center;">Graphique</th>
+              <th class="table-header table-group-header" colspan="3">Devise</th>
+              <th class="table-header table-group-header align-right" colspan="2">Taux</th>
             </tr>
           </thead>
           <tbody>
             <tr *ngFor="let rate of paginatedRates">
-              <td class="currency-cell">
+              <td class="currency-flag-cell">
                 <img [src]="getFlagUrl(rate.flag)" [alt]="rate.currency">
-                <span style="font-weight: bold; color: #003399; margin-right: 8px;">{{ rate.currency }}</span>
-                <span class="currency-name" style="color: #003399;">{{ currencyNames[rate.currency] || rate.currency }}</span>
               </td>
-              <td class="rate-cell" style="text-align: right;">
-                <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
-                  <mat-icon *ngIf="rate.trend === 'down'" style="color: #d32f2f; font-size: 16px; width: 16px; height: 16px;">arrow_downward</mat-icon>
-                  <mat-icon *ngIf="rate.trend === 'up'" style="color: #388e3c; font-size: 16px; width: 16px; height: 16px;">arrow_upward</mat-icon>
-                  <mat-icon *ngIf="!rate.trend || rate.trend === 'equal'" style="color: #9e9e9e; font-size: 16px; width: 16px; height: 16px;">remove</mat-icon>
-                  <span style="color: #003399;">{{ rate.rate !== null && rate.rate !== undefined ? rate.rate.toFixed(4) : '-' }}</span>
-                </div>
+              <td class="currency-code-cell">
+                <span class="currency-code">{{ rate.currency }}</span>
               </td>
-              <td class="chart-cell" style="text-align: center;">
-                 <mat-icon style="font-size: 18px; width: 18px; height: 18px; color: #999;">show_chart</mat-icon>
+              <td class="currency-name-cell">
+                <span class="currency-name">{{ currencyNames[rate.currency] || rate.currency }}</span>
+              </td>
+              <td class="rate-trend-cell">
+                <mat-icon *ngIf="rate.trend === 'down'" class="trend-icon down">arrow_downward</mat-icon>
+                <mat-icon *ngIf="rate.trend === 'up'" class="trend-icon up">arrow_upward</mat-icon>
+                <mat-icon *ngIf="!rate.trend || rate.trend === 'equal'" class="trend-icon neutral">remove</mat-icon>
+              </td>
+              <td class="rate-value-cell align-right">
+                <span class="rate-value">{{ rate.rate !== null && rate.rate !== undefined ? rate.rate.toFixed(4) : '-' }}</span>
               </td>
             </tr>
           </tbody>
         </table>
 
         <!-- Pagination Controls -->
-        <div class="pagination-controls" *ngIf="totalPages > 1" style="display: flex; justify-content: center; align-items: center; gap: 16px; margin-top: 16px;">
+        <div class="pagination-controls" *ngIf="totalPages > 1">
           <button mat-icon-button (click)="prevPage()" [disabled]="currentPage === 0">
             <mat-icon>chevron_left</mat-icon>
           </button>
@@ -171,69 +208,35 @@
           </button>
         </div>
 
-        <!-- API Response Example -->
-        <div class="api-response-example">
-          <div class="api-request" *ngIf="ecbSourceUrl">
-            <strong>Requête BCE (source):</strong>
-            <code class="request-url" style="font-size: 10px;">{{ ecbSourceUrl }}</code>
-          </div>
-          <div class="api-request" style="margin-top: 8px;">
-            <strong>Requête API Ingérop:</strong>
-            <code class="request-url" style="font-size: 10px;">{{ getApiRequestUrl() }}</code>
-          </div>
-          <div class="api-response">
-            <pre><code>{{ apiResponseExample }}</code></pre>
-          </div>
-        </div>
       </section>
 
       <!-- Right Column: Chart -->
       <section class="chart-section">
         <div class="chart-header">
-          <div class="section-title">Historique</div>
+          <div class="section-title">Historique ({{ chartStartDate }} → {{ chartEndDate }})</div>
           
-          <div style="display: flex; align-items: center; gap: 16px;">
-            <div class="period-selector">
-              <label>
-                <input 
-                  type="radio" 
-                  name="period" 
-                  value="Mois" 
-                  [(ngModel)]="selectedPeriod"
-                  (change)="onPeriodChange()"
-                />
-                <span>Mois</span>
-              </label>
-              <label>
-                <input 
-                  type="radio" 
-                  name="period" 
-                  value="Trimestre" 
-                  [(ngModel)]="selectedPeriod"
-                  (change)="onPeriodChange()"
-                />
-                <span>Trimestre</span>
-              </label>
-              <label>
-                <input 
-                  type="radio" 
-                  name="period" 
-                  value="Année" 
-                  [(ngModel)]="selectedPeriod"
-                  (change)="onPeriodChange()"
-                />
-                <span>Année</span>
-              </label>
-              <label>
-                <input 
-                  type="radio" 
-                  name="period" 
-                  value="Tout" 
-                  [(ngModel)]="selectedPeriod"
-                  (change)="onPeriodChange()"
-                />
-                <span>Tout</span>
-              </label>
+          <div class="chart-actions">
+            <select [(ngModel)]="selectedPeriod" (change)="onPeriodChange()" class="period-dropdown">
+              <option value="Mois">Mois</option>
+              <option value="Trimestre">Trimestre</option>
+              <option value="Année">Année</option>
+              <option value="Tout">Tout</option>
+            </select>
+            
+            <div class="header-links">
+              <div class="link-pair" *ngIf="getHistoryEcbUrl()">
+                <span class="link-label">BCE:</span>
+                <a [href]="getHistoryEcbUrl()" (click)="handleLinkClick($event, getHistoryEcbUrl())" class="link-icon" title="Copier le lien">
+                  <mat-icon>link</mat-icon>
+                </a>
+              </div>
+              
+              <div class="link-pair">
+                <span class="link-label">Local:</span>
+                <a [href]="getHistoryApiUrl()" (click)="handleLinkClick($event, getHistoryApiUrl())" class="link-icon" title="Copier le lien">
+                  <mat-icon>link</mat-icon>
+                </a>
+              </div>
             </div>
             
             <button 
@@ -251,22 +254,11 @@
         <div class="chart-container">
           <canvas #ratesChart id="ratesChart"></canvas>
         </div>
-        <div *ngIf="chartStartDate && chartEndDate" style="text-align: center; margin-top: 8px; font-size: 12px; color: #666;">
-          Période: {{ chartStartDate }} → {{ chartEndDate }}
-        </div>
+
       </section>
     </div>
-    <!-- Always-visible API links for transparency -->
-    <div class="api-links" style="margin-top: 12px; font-size: 13px; color: #444;">
-      <div *ngIf="ecbSourceUrl">
-        <strong>Requête BCE (source):</strong>
-        <code style="display:inline-block; margin-left:8px; word-break:break-all; font-size: 10px;">{{ ecbSourceUrl }}</code>
-      </div>
-      <div style="margin-top:6px;">
-        <strong>Requête API Ingérop:</strong>
-        <code style="display:inline-block; margin-left:8px; word-break:break-all; font-size: 10px;">{{ getApiRequestUrl() }}</code>
-      </div>
-    </div>
+
+
   </div>
 
   <!-- Docs View -->
@@ -274,4 +266,11 @@
     <app-docs-section></app-docs-section>
   </div>
 </main>
+
+<footer class="site-footer">
+  <div class="container footer-content">
+    <span class="footer-left">{{ footerLabel }}</span>
+    <span class="footer-right">v.{{ appVersion }}</span>
+  </div>
+</footer>
 
