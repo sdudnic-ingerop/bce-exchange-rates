@@ -24,6 +24,7 @@ services:
       - PORT=8000
       - HOST=0.0.0.0
       - REDIS_URL=redis://redis:6379
+      - NODE_OPTIONS=--max-http-header-size=65536
     networks:
       - bce-network
     volumes:

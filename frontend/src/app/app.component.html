@@ -55,10 +55,12 @@
               </button>
             </mat-chip-row>
             <input
+              #currencyInput
               placeholder="Chercher par code ou pays..."
               [matChipInputFor]="chipGrid"
               [(ngModel)]="currencyFilter"
               (keydown)="onCurrencyInput($event)"
+              (paste)="onCurrencyPaste($event)"
               [matAutocomplete]="auto"
               (blur)="onCurrencyPanelClosed()"
             />
@@ -71,17 +73,6 @@
               </div>
             </mat-option>
           </mat-autocomplete>
-          <button 
-            *ngIf="selectedCurrencies.length > 0 || currencyFilter" 
-            matSuffix 
-            mat-icon-button 
-            (click)="applyCurrencySelection()" 
-            title="Valider la sélection"
-            [matTooltip]="'Valider la sélection'"
-          >
-            <mat-icon class="validate-icon">check</mat-icon>
-          </button>
-
           <button 
             *ngIf="selectedCurrencies.length > 0" 
             matSuffix 

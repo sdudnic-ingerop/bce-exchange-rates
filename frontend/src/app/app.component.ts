@@ -6,7 +6,7 @@ import { MatChipsModule } from '@angular/material/chips';
 import { MatIconModule } from '@angular/material/icon';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
-import { MatAutocompleteModule } from '@angular/material/autocomplete';
+import { MatAutocompleteModule, MatAutocompleteTrigger } from '@angular/material/autocomplete';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatNativeDateModule, DateAdapter, MAT_DATE_FORMATS } from '@angular/material/core';
@@ -86,9 +86,13 @@ interface CetParts {
 })
 export class AppComponent implements OnInit, AfterViewInit {
   @ViewChild('ratesChart', { static: false }) chartCanvas?: ElementRef<HTMLCanvasElement>;
+  @ViewChild(MatAutocompleteTrigger) autocompleteTrigger?: MatAutocompleteTrigger;
+  @ViewChild('currencyInput') currencyInput?: ElementRef<HTMLInputElement>;
 
   private http = inject(HttpClient);
   private cdr = inject(ChangeDetectorRef);
+  private fetchTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly fetchDebounceMs = 300;
   
   // API Configuration
   private apiBase = this.getApiBase();
@@ -151,7 +155,7 @@ export class AppComponent implements OnInit, AfterViewInit {
   currencyFilter: string = '';
   currentView: 'home' | 'docs' = 'home';
   docsUrl: string = '';
-  appVersion: string = '1.0.0';
+  appVersion: string = '1.0.1';
   footerYear: number = new Date().getFullYear();
 
   // Footer label: show range only when different from start year
@@ -262,14 +266,15 @@ export class AppComponent implements OnInit, AfterViewInit {
     });
   }
   
-  addCurrency(currency: string) {
-    const upperCurrency = currency.toUpperCase().trim();
-    if (upperCurrency && 
-        this.availableCurrencies.includes(upperCurrency) && 
-        !this.selectedCurrencies.includes(upperCurrency)) {
-      this.selectedCurrencies.push(upperCurrency);
+  addCurrency(currency: string): boolean {
+    const resolved = this.resolveCurrencyCode(currency);
+    if (resolved && !this.selectedCurrencies.includes(resolved)) {
+      this.selectedCurrencies.push(resolved);
       this.currencyFilter = '';
+      this.clearCurrencyInput();
+      return true;
     }
+    return false;
   }
   
   removeCurrency(currency: string) {
@@ -279,12 +284,25 @@ export class AppComponent implements OnInit, AfterViewInit {
     }
   }
   
-  onCurrencyInput(event: any) {
-    const value = event.target.value;
-    if (event.key === 'Enter' || event.key === ',') {
+  onCurrencyInput(event: KeyboardEvent) {
+    const target = event.target as HTMLInputElement | null;
+    const value = target?.value ?? '';
+
+    if (event.key === 'Enter' || event.key === ',' || event.key === ';') {
+      // Let MatAutocomplete handle selection when an option is active
+      if (this.autocompleteTrigger?.panelOpen && this.autocompleteTrigger.activeOption) {
+        return;
+      }
+
       event.preventDefault();
-      this.addCurrency(value);
+      this.addCurrenciesFromInput(value);
     }
+  }
+
+  onCurrencyPaste(event: ClipboardEvent) {
+    event.preventDefault();
+    const pasted = event.clipboardData?.getData('text') ?? '';
+    this.addCurrenciesFromInput(pasted);
   }
   
   selectCurrency(currency: string) {
@@ -293,6 +311,10 @@ export class AppComponent implements OnInit, AfterViewInit {
     if (this.availableCurrencies.includes(code) && !this.selectedCurrencies.includes(code)) {
       this.selectedCurrencies = [...this.selectedCurrencies, code];
       this.currencyFilter = '';
+      this.clearCurrencyInput();
+      this.autocompleteTrigger?.closePanel();
+      // Debounced refresh so table/history/links update ensemble
+      this.scheduleFetchWithDebounce();
     }
   }
   
@@ -314,17 +336,78 @@ export class AppComponent implements OnInit, AfterViewInit {
   applyCurrencySelection() {
     const filterValue = (this.currencyFilter || '').trim();
     if (filterValue) {
-      // If user typed a currency code directly, try to add it
-      const code = filterValue.toUpperCase();
-      if (this.availableCurrencies.includes(code) && !this.selectedCurrencies.includes(code)) {
-        this.selectedCurrencies = [...this.selectedCurrencies, code];
+      const added = this.addCurrenciesFromInput(filterValue);
+      if (added) {
+        this.scheduleFetchWithDebounce();
       }
     }
 
     // Clear the input and refresh data
     this.currencyFilter = '';
-    // Reload rates and history
-    this.fetchRatesWithValidation();
+    this.clearCurrencyInput();
+  }
+
+  private resolveCurrencyCode(input: string): string | null {
+    const value = input.trim();
+    if (!value) return null;
+
+    const upper = value.toUpperCase();
+    if (this.availableCurrencies.includes(upper)) {
+      return upper;
+    }
+
+    // Try to match by code substring (e.g., "mex" -> MXN)
+    const byCode = this.availableCurrencies.find(code => code.toLowerCase().includes(value.toLowerCase()));
+    if (byCode) return byCode;
+
+    // Try to match by currency name
+    const lower = value.toLowerCase();
+    const byName = this.availableCurrencies.find(code => (this.currencyNames[code] || '').toLowerCase().includes(lower));
+    return byName || null;
+  }
+
+  private addCurrenciesFromInput(raw: string): boolean {
+    const tokens = this.normalizeCurrencyInput(raw);
+    let added = false;
+
+    tokens.forEach(token => {
+      const resolved = this.resolveCurrencyCode(token);
+      if (resolved && !this.selectedCurrencies.includes(resolved)) {
+        this.selectedCurrencies.push(resolved);
+        added = true;
+      }
+    });
+
+    this.currencyFilter = '';
+    this.clearCurrencyInput();
+    this.autocompleteTrigger?.closePanel();
+    if (added) {
+      this.scheduleFetchWithDebounce();
+    }
+    return added;
+  }
+
+  private normalizeCurrencyInput(raw: string): string[] {
+    if (!raw) return [];
+    return raw
+      .split(/[;,\s]+/)
+      .map(token => token.trim())
+      .filter(token => token.length > 0);
+  }
+
+  private clearCurrencyInput() {
+    if (this.currencyInput?.nativeElement) {
+      this.currencyInput.nativeElement.value = '';
+    }
+  }
+
+  private scheduleFetchWithDebounce() {
+    if (this.fetchTimer) {
+      clearTimeout(this.fetchTimer);
+    }
+    this.fetchTimer = setTimeout(() => {
+      this.fetchRatesWithValidation();
+    }, this.fetchDebounceMs);
   }
   
   // Date Selection
@@ -783,9 +866,13 @@ export class AppComponent implements OnInit, AfterViewInit {
     
     const startDate = dates[0];
     const endDate = dates[dates.length - 1];
-    
-    // ECB API format for historical data: EXR/D..EUR.SP00.A?start=YYYY-MM-DD&end=YYYY-MM-DD
-    return `https://data-api.ecb.europa.eu/service/data/EXR/D..EUR.SP00.A?start=${startDate}&end=${endDate}&format=jsondata`;
+
+    // Build ECB SDW series list for the selected currencies; fall back to wildcard if none selected
+    const seriesSegment = (this.selectedCurrencies.length > 0)
+      ? this.selectedCurrencies.map(c => `EXR/D.${c}.EUR.SP00.A`).join(',')
+      : 'EXR/D..EUR.SP00.A';
+
+    return `https://data-api.ecb.europa.eu/service/data/${seriesSegment}?start=${startDate}&end=${endDate}&format=jsondata`;
   }
 
   /**
